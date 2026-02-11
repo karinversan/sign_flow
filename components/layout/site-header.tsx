@@ -16,11 +16,11 @@ import {
 import { cn } from "@/lib/utils";
 
 const homeSections = [
-  { id: "hero", label: "Главная" },
-  { id: "modes", label: "Режимы" },
-  { id: "how", label: "Как работает" },
-  { id: "features", label: "Возможности" },
-  { id: "model", label: "Модель" },
+  { id: "hero", label: "Home" },
+  { id: "modes", label: "Modes" },
+  { id: "how", label: "How it works" },
+  { id: "features", label: "Features" },
+  { id: "model", label: "Model" },
   { id: "faq", label: "FAQ" }
 ];
 
@@ -127,7 +127,7 @@ export function SiteHeader() {
 
           <div className="flex items-center gap-2">
             <Button asChild size="sm" className="h-10 rounded-full bg-white px-4 text-black hover:bg-white/90">
-              <Link href="/live">Запустить демо</Link>
+              <Link href="/live">Launch demo</Link>
             </Button>
 
             <Sheet>
@@ -136,14 +136,14 @@ export function SiteHeader() {
                   variant="outline"
                   size="icon"
                   className="h-10 w-10 rounded-full xl:hidden"
-                  aria-label="Открыть меню"
+                  aria-label="Open menu"
                 >
                   <Menu className="h-4 w-4" />
                 </Button>
               </SheetTrigger>
               <SheetContent side="right" className="w-[90vw] max-w-sm">
                 <SheetHeader>
-                  <SheetTitle>Навигация</SheetTitle>
+                  <SheetTitle>Navigation</SheetTitle>
                 </SheetHeader>
                 <div className="mt-6 space-y-2">
                   {homeSections.map((item) => (
@@ -165,7 +165,7 @@ export function SiteHeader() {
                     </Link>
                   ))}
                   <Button asChild className="mt-3 h-11 w-full rounded-xl bg-white text-black">
-                    <Link href="/live">Запустить демо</Link>
+                    <Link href="/live">Launch demo</Link>
                   </Button>
                 </div>
               </SheetContent>
