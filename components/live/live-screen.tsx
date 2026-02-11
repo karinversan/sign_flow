@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CircleDot, Eraser, Mic2, Pause, Play, Settings2 } from "lucide-react";
+import { CircleDot, Eraser, Home, Mic2, Pause, Play, Settings2, Upload } from "lucide-react";
 
 import { useMediaQuery } from "@/lib/hooks/use-media-query";
 import { generateSubtitleChunk, seedSubtitles } from "@/lib/mock/subtitles";
@@ -38,6 +39,7 @@ const defaultSettings: LiveSettingsState = {
 export function LiveScreen() {
   const [isRunning, setIsRunning] = useState(false);
   const [open, setOpen] = useState(false);
+  const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
   const [settings, setSettings] = useState<LiveSettingsState>(defaultSettings);
   const [subtitleLines, setSubtitleLines] = useState(seedSubtitles());
   const [confidence, setConfidence] = useState(86);
@@ -74,34 +76,37 @@ export function LiveScreen() {
   return (
     <section className="relative h-[100dvh] overflow-hidden">
       <div className="absolute inset-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#070b14] via-[#06060d] to-[#0a0f1c]" />
-        <motion.div
-          animate={{ x: ["-8%", "8%", "-8%"], y: ["2%", "-2%", "2%"] }}
-          transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute left-[-10%] top-[-20%] h-[70vh] w-[60vw] rounded-full bg-cyan-500/20 blur-[120px]"
-        />
-        <motion.div
-          animate={{ x: ["4%", "-6%", "4%"], y: ["-3%", "3%", "-3%"] }}
-          transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute right-[-12%] top-[14%] h-[65vh] w-[50vw] rounded-full bg-fuchsia-500/15 blur-[120px]"
-        />
+        <div className="absolute inset-0 bg-[radial-gradient(900px_420px_at_50%_0%,rgba(255,255,255,0.08),transparent_58%),linear-gradient(180deg,#0e1118_0%,#080a0f_45%,#06070a_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_68%,rgba(0,0,0,0.55)_100%)]" />
       </div>
 
       <div className="absolute inset-0 scan-overlay opacity-70" />
 
       <div className="relative z-20 flex h-full flex-col">
-        <header className="mx-4 mt-4 flex items-center justify-between rounded-xl border border-white/15 bg-black/35 px-4 py-3 backdrop-blur-xl md:mx-6">
+        <header className="mx-4 mt-4 flex items-center justify-between rounded-xl border border-white/15 bg-black/45 px-4 py-3 backdrop-blur-xl md:mx-6">
           <div className="flex items-center gap-3">
             <div className="rounded-lg border border-white/20 bg-white/10 p-1.5">
-              <CircleDot className="h-4 w-4 text-cyan-300" />
+              <CircleDot className="h-4 w-4 text-white/80" />
             </div>
             <div>
               <p className="font-accent text-sm tracking-wide">SignFlow Live</p>
-              <p className="text-xs text-muted-foreground">Subtitle overlay demo</p>
+              <p className="text-xs text-muted-foreground">Realtime subtitles and voice controls</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 md:gap-3">
+            <Button asChild variant="outline" size="sm" className="gap-1.5">
+              <Link href="/">
+                <Home className="h-4 w-4" />
+                Home
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="gap-1.5">
+              <Link href="/upload">
+                <Upload className="h-4 w-4" />
+                Video
+              </Link>
+            </Button>
             <Badge variant={isRunning ? "success" : "secondary"}>{status}</Badge>
             <Sheet open={open} onOpenChange={setOpen}>
               <SheetTrigger asChild>
@@ -127,12 +132,14 @@ export function LiveScreen() {
 
         <div className="relative flex-1">
           <div className="absolute inset-4 rounded-3xl border border-white/15 bg-black/25 md:inset-6" />
-          <SubtitleOverlay
-            lines={subtitleLines}
-            size={settings.subtitleSize}
-            position={settings.subtitlePosition}
-            withBackground={settings.subtitleBg}
-          />
+          {subtitlesEnabled && (
+            <SubtitleOverlay
+              lines={subtitleLines}
+              size={settings.subtitleSize}
+              position={settings.subtitlePosition}
+              withBackground={settings.subtitleBg}
+            />
+          )}
 
           <AnimatePresence>
             {!isRunning && (
@@ -162,7 +169,7 @@ export function LiveScreen() {
             </Button>
 
             <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.03] px-3 py-1.5">
-              <Mic2 className={cn("h-4 w-4", settings.voiceEnabled ? "text-cyan-300" : "text-muted-foreground")} />
+              <Mic2 className={cn("h-4 w-4", settings.voiceEnabled ? "text-white/90" : "text-muted-foreground")} />
               <span className="text-sm">Voice</span>
               <Switch
                 checked={settings.voiceEnabled}
@@ -170,6 +177,11 @@ export function LiveScreen() {
                   setSettings((prev) => ({ ...prev, voiceEnabled: checked }))
                 }
               />
+            </div>
+
+            <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.03] px-3 py-1.5">
+              <span className="text-sm">Subtitles</span>
+              <Switch checked={subtitlesEnabled} onCheckedChange={setSubtitlesEnabled} />
             </div>
 
             <Button

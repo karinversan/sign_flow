@@ -41,7 +41,7 @@ export function SubtitleOverlay({
                 sizeClasses[size],
                 line.kind === "partial"
                   ? "opacity-65 italic"
-                  : "opacity-100 drop-shadow-[0_0_14px_rgba(255,255,255,0.22)]"
+                  : "opacity-100 font-semibold"
               )}
             >
               {line.text}
