@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { Home, Radio, Upload } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,12 +36,36 @@ export default function HistoryPage() {
 
   return (
     <section className="container pb-14 pt-12">
-      <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <div className="page-head flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
+          <p className="page-kicker">Jobs history</p>
           <h1 className="section-title">History</h1>
-          <p className="section-copy mt-2">Mock список задач с фильтром по статусу и поиском.</p>
+          <p className="page-lead">Mock список задач с фильтром по статусу, поиском и быстрым открытием.</p>
         </div>
 
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" size="sm" className="gap-2">
+            <Link href="/">
+              <Home className="h-4 w-4" />
+              Главная
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="gap-2">
+            <Link href="/live">
+              <Radio className="h-4 w-4" />
+              Realtime
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="gap-2">
+            <Link href="/upload">
+              <Upload className="h-4 w-4" />
+              Video
+            </Link>
+          </Button>
+        </div>
+      </div>
+
+      <div className="mb-8 flex w-full flex-wrap gap-2 md:w-auto">
         <div className="flex w-full gap-2 md:w-auto">
           <Input
             value={query}
@@ -64,7 +89,7 @@ export default function HistoryPage() {
 
       <div className="space-y-3">
         {filtered.map((item) => (
-          <Card key={item.id} className="transition hover:shadow-glow">
+          <Card key={item.id} className="border-white/10 bg-black/45 transition hover:border-white/20">
             <CardHeader>
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <CardTitle className="text-lg">{item.id}</CardTitle>

@@ -1,4 +1,6 @@
 import { docsFaq } from "@/lib/mock/data";
+import Link from "next/link";
+import { Home, Radio, Upload } from "lucide-react";
 
 import {
   Accordion,
@@ -6,20 +8,44 @@ import {
   AccordionItem,
   AccordionTrigger
 } from "@/components/ui/accordion";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function DocsPage() {
   return (
     <section className="container pb-14 pt-12">
-      <div className="mb-8 max-w-3xl">
-        <h1 className="section-title">Docs</h1>
-        <p className="section-copy mt-3">
-          Быстрый старт: перейдите в `/live` для имитации потока и в `/upload` для mock-пайплайна
-          задач.
-        </p>
+      <div className="page-head flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="max-w-3xl">
+          <p className="page-kicker">Docs and FAQ</p>
+          <h1 className="section-title">Docs</h1>
+          <p className="page-lead">
+            Быстрый старт: перейдите в `/live` для имитации потока и в `/upload` для mock-пайплайна
+            задач.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" size="sm" className="gap-2">
+            <Link href="/">
+              <Home className="h-4 w-4" />
+              Главная
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="gap-2">
+            <Link href="/live">
+              <Radio className="h-4 w-4" />
+              Realtime
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="gap-2">
+            <Link href="/upload">
+              <Upload className="h-4 w-4" />
+              Video
+            </Link>
+          </Button>
+        </div>
       </div>
 
-      <Card>
+      <Card className="border-white/10 bg-black/45">
         <CardHeader>
           <CardTitle>Quick instructions</CardTitle>
         </CardHeader>
@@ -33,7 +59,7 @@ export default function DocsPage() {
         </CardContent>
       </Card>
 
-      <Card className="mt-5">
+      <Card className="mt-5 border-white/10 bg-black/45">
         <CardHeader>
           <CardTitle>FAQ</CardTitle>
         </CardHeader>

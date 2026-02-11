@@ -1,12 +1,12 @@
 "use client";
 
-import { ChangeEvent, DragEvent, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { FileUp, Film, WandSparkles } from "lucide-react";
+import Link from "next/link";
+import { ChangeEvent, useMemo, useState } from "react";
+import { Download, FileUp, Home, Radio, Volume2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -15,249 +15,378 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { outputLanguages, signLanguages, voiceOptions } from "@/lib/mock/data";
 
-const exportOptions = ["SRT", "VTT", "Burn-in video", "Audio only", "Video+Audio"];
+type RenderMode = "subtitles" | "voice" | "both";
 
-type MockFile = {
-  id: string;
-  name: string;
-  size: string;
-};
+function createDownload(fileName: string, content: string, mime = "text/plain") {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
-function sizeToReadable(size: number) {
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+function toSrt(text: string) {
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return lines
+    .map((line, index) => {
+      const startSec = index * 4;
+      const endSec = startSec + 3;
+      const s = `00:00:${String(startSec).padStart(2, "0")},000`;
+      const e = `00:00:${String(endSec).padStart(2, "0")},000`;
+      return `${index + 1}\n${s} --> ${e}\n${line}`;
+    })
+    .join("\n\n");
 }
 
 export default function UploadPage() {
-  const router = useRouter();
-  const [files, setFiles] = useState<MockFile[]>([]);
-  const [dragActive, setDragActive] = useState(false);
+  const [fileName, setFileName] = useState("");
   const [signLanguage, setSignLanguage] = useState("ASL");
   const [outputLanguage, setOutputLanguage] = useState("English");
+  const [mode, setMode] = useState<RenderMode>("both");
+
+  const [subtitleEnabled, setSubtitleEnabled] = useState(true);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [voice, setVoice] = useState("nova");
-  const [subtitleSize, setSubtitleSize] = useState("M");
-  const [subtitlePosition, setSubtitlePosition] = useState("bottom");
+  const [fontSize, setFontSize] = useState("M");
+  const [fontFamily, setFontFamily] = useState("Inter");
+  const [subtitleColor, setSubtitleColor] = useState("#ffffff");
   const [subtitleBackground, setSubtitleBackground] = useState(true);
-  const [selectedExports, setSelectedExports] = useState<string[]>(["SRT", "VTT"]);
+  const [subtitlePosition, setSubtitlePosition] = useState("bottom");
 
-  const onFiles = (incoming: FileList | null) => {
-    if (!incoming?.length) return;
-    const mapped = Array.from(incoming).map((file) => ({
-      id: crypto.randomUUID(),
-      name: file.name,
-      size: sizeToReadable(file.size || 6_000_000)
-    }));
-    setFiles((prev) => [...mapped, ...prev]);
+  const [originalVolume, setOriginalVolume] = useState(70);
+  const [overlayVolume, setOverlayVolume] = useState(75);
+
+  const [transcript, setTranscript] = useState(
+    "Здравствуйте, это пример перевода видео.\nВы можете редактировать текст субтитров перед экспортом."
+  );
+
+  const onFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setFileName(file.name);
   };
 
-  const onDrop = (event: DragEvent<HTMLLabelElement>) => {
-    event.preventDefault();
-    setDragActive(false);
-    onFiles(event.dataTransfer.files);
-  };
-
-  const canStart = useMemo(() => files.length > 0, [files.length]);
+  const previewClass = useMemo(() => {
+    const size = fontSize === "S" ? "text-base" : fontSize === "L" ? "text-2xl" : "text-xl";
+    const position = subtitlePosition === "top" ? "top-5" : "bottom-5";
+    return { size, position };
+  }, [fontSize, subtitlePosition]);
 
   return (
     <section className="container pb-14 pt-12">
-      <div className="mb-8 max-w-3xl">
-        <h1 className="section-title">Upload Video</h1>
-        <p className="section-copy mt-3">
-          Полностью mock-загрузка: drag-and-drop зона, пресеты и запуск имитации обработки.
-        </p>
+      <div className="page-head flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="max-w-3xl">
+          <p className="page-kicker">Video editor mode</p>
+          <h1 className="section-title">Перевод видео</h1>
+          <p className="page-lead">
+            Загрузите один файл и сразу редактируйте перевод: язык, субтитры, озвучку, стиль и экспорт.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" className="gap-2">
+            <Link href="/">
+              <Home className="h-4 w-4" />
+              Главная
+            </Link>
+          </Button>
+          <Button asChild variant="secondary" className="gap-2">
+            <Link href="/live">
+              <Radio className="h-4 w-4" />
+              Realtime
+            </Link>
+          </Button>
+        </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1.2fr_1fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Видеофайлы</CardTitle>
-            <CardDescription>Файлы не отправляются, список хранится только в UI.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <label
-              onDragOver={(event) => {
-                event.preventDefault();
-                setDragActive(true);
-              }}
-              onDragLeave={() => setDragActive(false)}
-              onDrop={onDrop}
-              className={`flex min-h-60 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed p-6 text-center transition ${
-                dragActive
-                  ? "border-primary/70 bg-primary/10"
-                  : "border-white/20 bg-white/[0.02] hover:border-white/35"
-              }`}
-            >
-              <FileUp className="mb-3 h-8 w-8 text-primary" />
-              <p className="font-medium">Drag & drop video here</p>
-              <p className="mt-1 text-sm text-muted-foreground">или выберите файл вручную</p>
-              <input
-                className="hidden"
-                type="file"
-                accept="video/*"
-                multiple
-                onChange={(event: ChangeEvent<HTMLInputElement>) => onFiles(event.target.files)}
-              />
-            </label>
+      <Card className="border-white/10 bg-black/45">
+        <CardHeader>
+          <CardTitle>1) Загрузка одного видео</CardTitle>
+          <CardDescription>После выбора файла редактор открывается сразу на этой же странице.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <label className="flex min-h-40 cursor-pointer items-center justify-center gap-3 rounded-2xl border border-dashed border-white/20 bg-white/[0.02] p-6 text-center hover:border-white/30">
+            <FileUp className="h-6 w-6 text-white/75" />
+            <div>
+              <p className="text-sm font-medium">Выберите один видеофайл</p>
+              <p className="text-xs text-muted-foreground">mp4 / mov / mkv (mock)</p>
+            </div>
+            <input type="file" accept="video/*" className="hidden" onChange={onFileChange} />
+          </label>
+          {fileName && (
+            <p className="mt-3 text-sm text-muted-foreground">
+              Загружено: <span className="text-foreground">{fileName}</span>
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
-            <div className="space-y-2">
-              {files.length === 0 ? (
-                <div className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-muted-foreground">
-                  Пока нет файлов.
-                </div>
-              ) : (
-                files.map((file) => (
-                  <div
-                    key={file.id}
-                    className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Film className="h-4 w-4 text-cyan-300" />
-                      <span className="text-sm">{file.name}</span>
+      {fileName && (
+        <div className="mt-5 grid gap-5 lg:grid-cols-[1.3fr_0.9fr]">
+          <Card className="border-white/10 bg-black/45">
+            <CardHeader>
+              <CardTitle>2) Редактор перевода</CardTitle>
+              <CardDescription>
+                Вы можете сразу выбрать как должен выглядеть итог: субтитры, озвучка или оба варианта.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                <p className="mb-2 text-xs uppercase tracking-[0.2em] text-white/60">Preview</p>
+                <div className="relative flex h-64 items-center justify-center rounded-lg border border-white/10 bg-black/35">
+                  <p className="text-sm text-muted-foreground">Mock video preview</p>
+                  {subtitleEnabled && (mode === "subtitles" || mode === "both") && (
+                    <div
+                      className={`absolute ${previewClass.position} left-1/2 w-[90%] -translate-x-1/2 px-3 py-2 text-center ${previewClass.size}`}
+                      style={{
+                        color: subtitleColor,
+                        fontFamily,
+                        background: subtitleBackground ? "rgba(0,0,0,0.58)" : "transparent",
+                        borderRadius: "10px"
+                      }}
+                    >
+                      {transcript.split("\n")[0]}
                     </div>
-                    <span className="text-xs text-muted-foreground">{file.size}</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Sign language</Label>
+                  <Select value={signLanguage} onValueChange={setSignLanguage}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {signLanguages.map((language) => (
+                        <SelectItem key={language} value={language}>
+                          {language}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Output language</Label>
+                  <Select value={outputLanguage} onValueChange={setOutputLanguage}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {outputLanguages.map((language) => (
+                        <SelectItem key={language} value={language}>
+                          {language}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Render mode</Label>
+                  <Select value={mode} onValueChange={(value) => setMode(value as RenderMode)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="subtitles">Subtitles only</SelectItem>
+                      <SelectItem value="voice">Voice only</SelectItem>
+                      <SelectItem value="both">Subtitles + Voice</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Voice</Label>
+                  <Select value={voice} onValueChange={setVoice}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {voiceOptions.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                <p className="mb-3 text-sm font-medium">Subtitle visual settings</p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Font size</Label>
+                    <Select value={fontSize} onValueChange={setFontSize}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="S">S</SelectItem>
+                        <SelectItem value="M">M</SelectItem>
+                        <SelectItem value="L">L</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                ))
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                  <div className="space-y-2">
+                    <Label>Font family</Label>
+                    <Select value={fontFamily} onValueChange={setFontFamily}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Inter">Inter</SelectItem>
+                        <SelectItem value="Space Grotesk">Space Grotesk</SelectItem>
+                        <SelectItem value="monospace">Monospace</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <WandSparkles className="h-5 w-5 text-fuchsia-300" />
-              Настройки перед обработкой
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Sign language</Label>
-                <Select value={signLanguage} onValueChange={setSignLanguage}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {signLanguages.map((language) => (
-                      <SelectItem key={language} value={language}>
-                        {language}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Output language</Label>
-                <Select value={outputLanguage} onValueChange={setOutputLanguage}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {outputLanguages.map((language) => (
-                      <SelectItem key={language} value={language}>
-                        {language}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-              <p className="mb-2 text-sm font-medium">Export</p>
-              <div className="grid grid-cols-2 gap-2">
-                {exportOptions.map((item) => (
-                  <label key={item} className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Checkbox
-                      checked={selectedExports.includes(item)}
-                      onCheckedChange={(checked) =>
-                        setSelectedExports((prev) =>
-                          checked ? [...prev, item] : prev.filter((value) => value !== item)
-                        )
-                      }
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Position</Label>
+                    <Select value={subtitlePosition} onValueChange={setSubtitlePosition}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="bottom">Bottom</SelectItem>
+                        <SelectItem value="top">Top</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Subtitle color</Label>
+                    <Input
+                      type="color"
+                      value={subtitleColor}
+                      onChange={(event) => setSubtitleColor(event.target.value)}
+                      className="h-10 p-1"
                     />
-                    {item}
-                  </label>
-                ))}
-              </div>
-            </div>
+                  </div>
+                </div>
 
-            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-              <p className="mb-2 text-sm font-medium">Subtitle style</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label>Size</Label>
-                  <Select value={subtitleSize} onValueChange={setSubtitleSize}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="S">S</SelectItem>
-                      <SelectItem value="M">M</SelectItem>
-                      <SelectItem value="L">L</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Position</Label>
-                  <Select value={subtitlePosition} onValueChange={setSubtitlePosition}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="bottom">Bottom</SelectItem>
-                      <SelectItem value="top">Top</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="mt-3 flex items-center justify-between rounded-lg border border-white/10 bg-black/25 px-3 py-2">
+                  <Label htmlFor="subtitle-bg">Subtitle background</Label>
+                  <Switch id="subtitle-bg" checked={subtitleBackground} onCheckedChange={setSubtitleBackground} />
                 </div>
               </div>
-              <div className="mt-3 flex items-center justify-between rounded-lg border border-white/10 bg-black/20 px-3 py-2">
-                <Label htmlFor="sub-bg">Background</Label>
-                <Switch
-                  id="sub-bg"
-                  checked={subtitleBackground}
-                  onCheckedChange={setSubtitleBackground}
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                <p className="mb-3 text-sm font-medium">Audio mix</p>
+                <div className="space-y-3">
+                  <div>
+                    <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
+                      <span>Original video volume</span>
+                      <span>{originalVolume}%</span>
+                    </div>
+                    <Slider value={[originalVolume]} onValueChange={(v) => setOriginalVolume(v[0] ?? 70)} max={100} />
+                  </div>
+                  <div>
+                    <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
+                      <span>Overlay voice volume</span>
+                      <span>{overlayVolume}%</span>
+                    </div>
+                    <Slider value={[overlayVolume]} onValueChange={(v) => setOverlayVolume(v[0] ?? 75)} max={100} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2">
+                  <span className="text-sm">Enable subtitles</span>
+                  <Switch checked={subtitleEnabled} onCheckedChange={setSubtitleEnabled} />
+                </div>
+                <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2">
+                  <span className="text-sm">Enable voiceover</span>
+                  <Switch checked={voiceEnabled} onCheckedChange={setVoiceEnabled} />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Editable transcript</Label>
+                <textarea
+                  className="min-h-32 w-full rounded-lg border border-white/10 bg-white/[0.03] p-3 text-sm"
+                  value={transcript}
+                  onChange={(event) => setTranscript(event.target.value)}
                 />
               </div>
-            </div>
+            </CardContent>
+          </Card>
 
-            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">Voice settings</p>
-                <Switch checked={voiceEnabled} onCheckedChange={setVoiceEnabled} />
-              </div>
-              <div className="mt-3">
-                <Select value={voice} onValueChange={setVoice} disabled={!voiceEnabled}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select voice" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {voiceOptions.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+          <Card className="border-white/10 bg-black/45">
+            <CardHeader>
+              <CardTitle>3) Экспорт</CardTitle>
+              <CardDescription>Mock-кнопки экспорта результата.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Button
+                variant="secondary"
+                className="w-full justify-start gap-2"
+                onClick={() => createDownload(`${fileName}.srt`, toSrt(transcript), "text/plain")}
+              >
+                <Download className="h-4 w-4" />
+                Скачать субтитры (.srt)
+              </Button>
+              <Button
+                variant="secondary"
+                className="w-full justify-start gap-2"
+                onClick={() =>
+                  createDownload(
+                    `${fileName}-voice-track.wav`,
+                    `Mock audio render\nVoice: ${voice}\nVolume: ${overlayVolume}%`,
+                    "audio/wav"
+                  )
+                }
+              >
+                <Volume2 className="h-4 w-4" />
+                Скачать только аудио дорожку
+              </Button>
+              <Button
+                variant="secondary"
+                className="w-full justify-start gap-2"
+                onClick={() =>
+                  createDownload(
+                    `${fileName}-full-video.mp4`,
+                    `Mock video export\nMode: ${mode}\nSubtitles: ${subtitleEnabled}\nVoice: ${voiceEnabled}`,
+                    "video/mp4"
+                  )
+                }
+              >
+                <Download className="h-4 w-4" />
+                Скачать видео полностью
+              </Button>
 
-            <Button
-              className="w-full"
-              disabled={!canStart}
-              onClick={() => {
-                const mockId = `job_${Math.random().toString(36).slice(2, 7)}`;
-                router.push(`/jobs/${mockId}`);
-              }}
-            >
-              Start processing
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+              <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-3 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">Кратко как пользоваться</p>
+                <ol className="mt-2 list-decimal space-y-1 pl-4 text-xs">
+                  <li>Загрузите один файл.</li>
+                  <li>Выберите язык и режим перевода.</li>
+                  <li>Настройте стиль субтитров и громкости.</li>
+                  <li>Отредактируйте текст и экспортируйте нужный формат.</li>
+                </ol>
+              </div>
+
+              <Button asChild variant="outline" className="mt-2 w-full">
+                <Link href="/">Вернуться на главный экран</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </section>
   );
 }
