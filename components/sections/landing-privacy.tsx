@@ -6,24 +6,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 export function LandingPrivacy() {
   return (
-    <section className="container mb-14 mt-16 md:mt-24">
+    <section className="container mb-14 mt-20 md:mt-24">
       <Reveal>
-        <Card className="relative overflow-hidden">
-          <div className="absolute -top-20 right-10 h-44 w-44 rounded-full bg-sky-500/15 blur-[90px]" />
+        <Card className="relative overflow-hidden border-0 bg-white/[0.03] shadow-none">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-cyan-300" />
+              <Shield className="h-5 w-5 text-primary" />
               Приватность
             </CardTitle>
             <CardDescription>
-              Блок отображает только принципы demo-режима без обещаний реальной обработки.
+              Никаких реальных обещаний: только понятное описание mock-режима.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {privacyItems.map((line) => (
               <div
                 key={line}
-                className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-muted-foreground"
+                className="rounded-lg bg-white/[0.04] px-3 py-2 text-sm text-muted-foreground"
               >
                 {line}
               </div>
