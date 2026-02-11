@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -37,6 +37,7 @@ import { formatSrtTime, formatTimecode, parseTimecodeInput, toSeconds } from "@/
 import { cn } from "@/lib/utils";
 
 type RenderMode = "subtitles" | "voice" | "both";
+type TimelineZoom = "fit" | 1 | 2 | 4;
 
 const initialSegments: TranscriptSegment[] = defaultTranscript.map((item) => ({ ...item }));
 
@@ -81,6 +82,8 @@ export default function UploadPage() {
   const [activeSegmentId, setActiveSegmentId] = useState(initialSegments[0]?.id ?? "");
   const [segmentQuery, setSegmentQuery] = useState("");
   const [jumpTo, setJumpTo] = useState("");
+  const [timelineZoom, setTimelineZoom] = useState<TimelineZoom>("fit");
+  const timelineViewportRef = useRef<HTMLDivElement | null>(null);
 
   const [signLanguage, setSignLanguage] = useState("ASL");
   const [outputLanguage, setOutputLanguage] = useState("English");
@@ -103,6 +106,27 @@ export default function UploadPage() {
     [segments]
   );
   const [playheadSec, setPlayheadSec] = useState(0);
+  const zoomLevels: TimelineZoom[] = ["fit", 1, 2, 4];
+  const pxPerSecond = timelineZoom === "fit" ? 0 : 14 * timelineZoom;
+
+  const trackWidthStyle = useMemo(() => {
+    if (timelineZoom === "fit") return "100%";
+    return `${Math.max(totalDuration * pxPerSecond, 680)}px`;
+  }, [timelineZoom, totalDuration, pxPerSecond]);
+
+  const getTrackPosition = (second: number) => {
+    if (timelineZoom === "fit") {
+      return `${(second / totalDuration) * 100}%`;
+    }
+    return `${second * pxPerSecond}px`;
+  };
+
+  const getTrackWidth = (duration: number) => {
+    if (timelineZoom === "fit") {
+      return `${Math.max((duration / totalDuration) * 100, 1.5)}%`;
+    }
+    return `${Math.max(duration * pxPerSecond, 6)}px`;
+  };
 
   const activeFromPlayhead = useMemo(
     () => findSegmentByTime(segments, playheadSec),
@@ -115,6 +139,14 @@ export default function UploadPage() {
       setActiveSegmentId(activeFromPlayhead.id);
     }
   }, [activeFromPlayhead, activeSegmentId]);
+
+  useEffect(() => {
+    if (timelineZoom === "fit") return;
+    const viewport = timelineViewportRef.current;
+    if (!viewport) return;
+    const nextLeft = Math.max(playheadSec * pxPerSecond - viewport.clientWidth * 0.5, 0);
+    viewport.scrollTo({ left: nextLeft, behavior: "auto" });
+  }, [playheadSec, timelineZoom, pxPerSecond]);
 
   const activeSegment = useMemo(
     () => segments.find((segment) => segment.id === activeSegmentId) ?? segments[0],
@@ -299,7 +331,7 @@ export default function UploadPage() {
             </Card>
 
             <div className="mt-5 grid gap-5 xl:grid-cols-[1.9fr_0.9fr]">
-              <Card className="border-white/10 bg-black/45">
+              <Card className="min-w-0 border-white/10 bg-black/45">
                 <CardHeader>
                   <CardTitle>2) Large preview and time navigation</CardTitle>
                   <CardDescription>
@@ -337,6 +369,26 @@ export default function UploadPage() {
                       <span>{segments.length} segments</span>
                     </div>
 
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Timeline zoom</span>
+                      {zoomLevels.map((level) => {
+                        const active = timelineZoom === level;
+                        const label = level === "fit" ? "Fit" : `${level}x`;
+                        return (
+                          <Button
+                            key={label}
+                            type="button"
+                            size="sm"
+                            variant={active ? "default" : "secondary"}
+                            className="h-7 px-3 text-xs"
+                            onClick={() => setTimelineZoom(level)}
+                          >
+                            {label}
+                          </Button>
+                        );
+                      })}
+                    </div>
+
                     <Slider
                       min={0}
                       max={totalDuration}
@@ -345,30 +397,41 @@ export default function UploadPage() {
                       onValueChange={(v) => setPlayheadSec(v[0] ?? 0)}
                     />
 
-                    <div className="relative mt-3 h-8 rounded-md border border-white/10 bg-black/30">
-                      {segments.map((segment) => {
-                        const start = toSeconds(segment.start);
-                        const end = toSeconds(segment.end);
-                        const left = (start / totalDuration) * 100;
-                        const width = Math.max(((end - start) / totalDuration) * 100, 1.5);
-                        const active = segment.id === activeSegmentId;
+                    <div
+                      ref={timelineViewportRef}
+                      className="mt-3 w-full max-w-full overflow-x-auto overflow-y-hidden overscroll-x-contain pb-1"
+                    >
+                      <div
+                        className="relative h-8 rounded-md border border-white/10 bg-black/30"
+                        style={{ width: trackWidthStyle, minWidth: "100%" }}
+                      >
+                        <div
+                          className="pointer-events-none absolute bottom-0 top-0 w-px bg-white/60"
+                          style={{ left: getTrackPosition(playheadSec) }}
+                        />
+                        {segments.map((segment) => {
+                          const start = toSeconds(segment.start);
+                          const end = toSeconds(segment.end);
+                          const active = segment.id === activeSegmentId;
+                          const duration = Math.max(end - start, 1);
 
-                        return (
-                          <button
-                            key={segment.id}
-                            type="button"
-                            onClick={() => selectSegment(segment)}
-                            className={cn(
-                              "absolute top-1 h-6 rounded-sm border transition",
-                              active
-                                ? "border-white/40 bg-white/35"
-                                : "border-white/15 bg-white/10 hover:border-white/35"
-                            )}
-                            style={{ left: `${left}%`, width: `${width}%` }}
-                            title={`${segment.start} - ${segment.end}`}
-                          />
-                        );
-                      })}
+                          return (
+                            <button
+                              key={segment.id}
+                              type="button"
+                              onClick={() => selectSegment(segment)}
+                              className={cn(
+                                "absolute top-1 h-6 rounded-sm border transition",
+                                active
+                                  ? "border-white/40 bg-white/35"
+                                  : "border-white/15 bg-white/10 hover:border-white/35"
+                              )}
+                              style={{ left: getTrackPosition(start), width: getTrackWidth(duration) }}
+                              title={`${segment.start} - ${segment.end}`}
+                            />
+                          );
+                        })}
+                      </div>
                     </div>
 
                     <div className="mt-3 flex flex-wrap items-center gap-2">
