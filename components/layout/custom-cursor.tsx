@@ -84,7 +84,7 @@ export function CustomCursor() {
     };
 
     const animate = () => {
-      const lag = 0.34;
+      const lag = 0.58;
       ringPosRef.current.x += (pointerRef.current.x - ringPosRef.current.x) * lag;
       ringPosRef.current.y += (pointerRef.current.y - ringPosRef.current.y) * lag;
 
