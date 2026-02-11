@@ -17,6 +17,8 @@ export function CustomCursor() {
   const [visible, setVisible] = useState(false);
   const [pressed, setPressed] = useState(false);
   const [mode, setMode] = useState<CursorMode>("default");
+  const modeRef = useRef<CursorMode>("default");
+  const visibleRef = useRef(false);
 
   useEffect(() => {
     if (reducedMotion) {
@@ -56,17 +58,33 @@ export function CustomCursor() {
     const onMove = (event: MouseEvent) => {
       pointerRef.current.x = event.clientX;
       pointerRef.current.y = event.clientY;
-      setVisible(true);
-      setMode(resolveMode(event.target));
+      if (!visibleRef.current) {
+        visibleRef.current = true;
+        setVisible(true);
+      }
+      const nextMode = resolveMode(event.target);
+      if (nextMode !== modeRef.current) {
+        modeRef.current = nextMode;
+        setMode(nextMode);
+      }
     };
 
     const onDown = () => setPressed(true);
     const onUp = () => setPressed(false);
-    const onOver = (event: MouseEvent) => setMode(resolveMode(event.target));
-    const onLeave = () => setVisible(false);
+    const onOver = (event: MouseEvent) => {
+      const nextMode = resolveMode(event.target);
+      if (nextMode !== modeRef.current) {
+        modeRef.current = nextMode;
+        setMode(nextMode);
+      }
+    };
+    const onLeave = () => {
+      visibleRef.current = false;
+      setVisible(false);
+    };
 
     const animate = () => {
-      const lag = 0.14;
+      const lag = 0.34;
       ringPosRef.current.x += (pointerRef.current.x - ringPosRef.current.x) * lag;
       ringPosRef.current.y += (pointerRef.current.y - ringPosRef.current.y) * lag;
 
