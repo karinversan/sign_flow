@@ -85,7 +85,7 @@ body::after {
   }
 
   .page-kicker {
-    @apply font-mono text-[11px] uppercase tracking-[0.24em] text-white/58;
+    @apply font-mono text-[11px] uppercase tracking-[0.24em] text-white/60;
   }
 
   .page-lead {
