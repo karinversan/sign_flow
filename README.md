@@ -70,3 +70,14 @@ npm run dev
 
 - All interactions are mock-only (no real camera/video processing/ML pipeline).
 - Exports (`SRT`, `VTT`, `TXT`) are generated client-side via Blob.
+
+## Backend Bootstrap
+
+- Detailed backend architecture plan: `docs/BACKEND_PLAN.md`
+- Execution tracker: `docs/BACKEND_BACKLOG.md`
+- Phase-1 backend scaffold: `backend/`
+- Start backend stack:
+
+```bash
+docker compose -f docker-compose.backend.yml up --build
+```
