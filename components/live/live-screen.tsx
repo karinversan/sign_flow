@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CircleDot, Eraser, Home, Mic2, Pause, Play, Settings2, Upload } from "lucide-react";
+import { CircleDot, Eraser, Mic2, Pause, Play, Settings2 } from "lucide-react";
 
 import { useMediaQuery } from "@/lib/hooks/use-media-query";
 import { generateSubtitleChunk, seedSubtitles } from "@/lib/mock/subtitles";
@@ -74,7 +73,7 @@ export function LiveScreen() {
   }, [confidence]);
 
   return (
-    <section className="relative h-[100dvh] overflow-hidden">
+    <section className="relative h-[calc(100dvh-4rem)] min-h-[560px] overflow-hidden">
       <div className="absolute inset-0">
         <div className="absolute inset-0 bg-[radial-gradient(900px_420px_at_50%_0%,rgba(255,255,255,0.08),transparent_58%),linear-gradient(180deg,#0e1118_0%,#080a0f_45%,#06070a_100%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_68%,rgba(0,0,0,0.55)_100%)]" />
@@ -83,7 +82,7 @@ export function LiveScreen() {
       <div className="absolute inset-0 scan-overlay opacity-70" />
 
       <div className="relative z-20 flex h-full flex-col">
-        <header className="mx-4 mt-4 flex items-center justify-between rounded-xl border border-white/15 bg-black/45 px-4 py-3 backdrop-blur-xl md:mx-6">
+        <header className="mx-4 mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/15 bg-black/45 px-4 py-3 backdrop-blur-xl md:mx-6">
           <div className="flex items-center gap-3">
             <div className="rounded-lg border border-white/20 bg-white/10 p-1.5">
               <CircleDot className="h-4 w-4 text-white/80" />
@@ -94,25 +93,13 @@ export function LiveScreen() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 md:gap-3">
-            <Button asChild variant="outline" size="sm" className="gap-1.5">
-              <Link href="/">
-                <Home className="h-4 w-4" />
-                Home
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" className="gap-1.5">
-              <Link href="/upload">
-                <Upload className="h-4 w-4" />
-                Video
-              </Link>
-            </Button>
+          <div className="flex flex-wrap items-center justify-end gap-2 md:gap-3">
             <Badge variant={isRunning ? "success" : "secondary"}>{status}</Badge>
             <Sheet open={open} onOpenChange={setOpen}>
               <SheetTrigger asChild>
                 <Button variant="secondary" size="sm" className="gap-1.5">
                   <Settings2 className="h-4 w-4" />
-                  Settings
+                  <span className="hidden sm:inline">Settings</span>
                 </Button>
               </SheetTrigger>
               <SheetContent side={isDesktop ? "right" : "bottom"} className="max-h-[90vh] overflow-y-auto">
