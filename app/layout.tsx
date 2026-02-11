@@ -4,6 +4,7 @@ import "./globals.css";
 
 import { AmbientBackground } from "@/components/layout/ambient-background";
 import { Chrome } from "@/components/layout/chrome";
+import { CustomCursor } from "@/components/layout/custom-cursor";
 
 export const metadata: Metadata = {
   title: "SignFlow - Subtitle First Sign Language UI",
@@ -19,6 +20,7 @@ export default function RootLayout({
     <html lang="ru" suppressHydrationWarning>
       <body className="font-sans">
         <AmbientBackground />
+        <CustomCursor />
         <Chrome>{children}</Chrome>
       </body>
     </html>
