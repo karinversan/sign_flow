@@ -112,7 +112,7 @@ export function LiveScreen() {
                 <SheetHeader>
                   <SheetTitle>Live Settings</SheetTitle>
                   <SheetDescription>
-                    Конфигурация демонстрационного live-потока.
+                    Configuration for the demo live stream.
                   </SheetDescription>
                 </SheetHeader>
                 <div className="mt-6">
@@ -143,7 +143,7 @@ export function LiveScreen() {
                 className="absolute inset-0 flex items-center justify-center"
               >
                 <div className="rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-muted-foreground backdrop-blur-sm">
-                  Нажмите Start, чтобы запустить mock поток субтитров
+                  Press Start to begin the mock subtitle stream
                 </div>
               </motion.div>
             )}
