@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     hf_offline: bool = True
     public_api_base_url: str = "http://localhost:8000"
 
+    async_job_processing_enabled: bool = False
+    jobs_queue_name: str = "signflow:jobs:inference"
+    worker_queue_pop_timeout_seconds: int = 1
+    worker_idle_sleep_seconds: float = 1.0
+
     worker_expire_interval_seconds: int = 20
     max_request_size_bytes: int = 52428800  # 50 MB for JSON/API requests
     max_upload_size_bytes: int = 2147483648  # 2 GB for media object upload policy hints

@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db import get_db
+from app.db import SessionLocal, get_db
 from app.models import (
     EditingSession,
     ExportArtifact,
@@ -38,6 +38,8 @@ from app.schemas import (
 from app.services.sessions import compute_expires_at, ensure_session_active, remaining_seconds, utc_now
 from app.services.exports import render_srt, render_txt, render_vtt
 from app.services.model_versions import activate_model_version, get_active_model_version
+from app.services.jobs import process_job_by_id
+from app.services.queue import enqueue_inference_job
 from app.services.uploads import validate_upload_request
 from app.storage import (
     create_download_url,
@@ -266,41 +268,32 @@ def create_job_for_session(session_id: str, payload: JobCreateRequest, db: Sessi
     now = utc_now()
     job = Job(
         session_id=session.id,
-        status=JobStatus.PROCESSING,
-        progress=15,
+        status=JobStatus.QUEUED if settings.async_job_processing_enabled else JobStatus.PROCESSING,
+        progress=0 if settings.async_job_processing_enabled else 15,
         model_version_id=selected_model_id,
         created_at=now,
         updated_at=now,
     )
     db.add(job)
     db.commit()
-    db.refresh(job)
+    job_id = job.id
 
-    provider = get_model_provider()
-    generated = provider.transcribe(
-        session.video_object_key,
-        options={"session_id": session.id, "model_id": selected_model_id},
-    )
-    for item in generated:
-        db.add(
-            TranscriptSegment(
-                job_id=job.id,
-                order_index=item.order_index,
-                start_sec=item.start_sec,
-                end_sec=item.end_sec,
-                text=item.text,
-                confidence=item.confidence,
-                version=1,
-            )
-        )
+    if settings.async_job_processing_enabled:
+        try:
+            enqueue_inference_job(job_id)
+        except Exception as exc:
+            job.status = JobStatus.FAILED
+            job.updated_at = utc_now()
+            db.commit()
+            raise HTTPException(status_code=503, detail="queue_unavailable") from exc
+    else:
+        process_job_by_id(job_id)
+        with SessionLocal() as read_db:
+            refreshed = _load_job_or_404(read_db, job_id)
+            return _job_to_response(refreshed)
 
-    job.status = JobStatus.DONE
-    job.progress = 100
-    job.updated_at = utc_now()
-    session.last_activity_at = utc_now()
-    db.commit()
-    db.refresh(job)
-    return _job_to_response(job)
+    refreshed = _load_job_or_404(db, job_id)
+    return _job_to_response(refreshed)
 
 
 @router.get("/jobs/{job_id}", response_model=JobResponse)
