@@ -27,7 +27,7 @@ export const mockHistory: JobHistoryItem[] = [
     id: "job_4n2k",
     createdAt: "2026-02-10 16:20",
     type: "Upload",
-    language: "RSL → Русский",
+    language: "RSL → Russian",
     status: "Processing"
   },
   {
@@ -51,24 +51,24 @@ export const defaultTranscript: TranscriptSegment[] = [
     id: "seg_1",
     start: "00:00:01",
     end: "00:00:04",
-    text: "Здравствуйте, сегодня мы начнем с краткого вступления."
+    text: "Hello, today we will start with a short introduction."
   },
   {
     id: "seg_2",
     start: "00:00:05",
     end: "00:00:08",
-    text: "Далее покажем, как меняется стиль субтитров в реальном времени."
+    text: "Next we will show how subtitle styling updates in real time."
   },
   {
     id: "seg_3",
     start: "00:00:09",
     end: "00:00:13",
-    text: "После этого можно экспортировать файл в формате SRT или VTT."
+    text: "After that you can export the file as SRT or VTT."
   },
   {
     id: "seg_4",
     start: "00:00:14",
     end: "00:00:18",
-    text: "Эта версия интерфейса демонстрирует только фронтенд-поведение."
+    text: "This interface version demonstrates frontend behavior only."
   }
 ];

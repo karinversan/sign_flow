@@ -7,16 +7,16 @@ export type SubtitleChunk = {
 };
 
 const phrases = [
-  "Доброе утро, начинаем трансляцию.",
-  "Сегодня обсудим настройки субтитров.",
-  "Добавьте язык вывода в панели справа.",
-  "Проверьте, что стиль текста остается читаемым.",
-  "Можно переключиться на профиль Speed.",
-  "Финальные фразы выглядят плотнее и ярче.",
-  "Частичные фразы слегка прозрачные.",
-  "Экспортируйте результат в SRT или VTT.",
-  "Этот поток полностью имитирован на фронте.",
-  "Для демонстрации мы обновляем подписи каждые две секунды."
+  "Good morning, we are starting the stream.",
+  "Today we will review subtitle settings.",
+  "Add an output language in the right panel.",
+  "Check that subtitle styling remains readable.",
+  "You can switch to the Speed profile.",
+  "Final phrases look denser and clearer.",
+  "Partial phrases are slightly transparent.",
+  "Export output as SRT or VTT.",
+  "This stream is fully simulated on the frontend.",
+  "For demo purposes, captions update every two seconds."
 ];
 
 function formatTs(date: Date) {

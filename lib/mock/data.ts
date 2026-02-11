@@ -24,19 +24,19 @@ export type LandingStep = {
 
 export const landingSteps: LandingStep[] = [
   {
-    title: "Захват жестов",
-    description: "Поток с камеры/видео приходит в pipeline как последовательность кадров.",
+    title: "Sign capture",
+    description: "Camera/video input enters the pipeline as a frame sequence.",
     icon: Video
   },
   {
-    title: "Распознавание + текст",
+    title: "Recognition + text",
     description:
-      "Модель формирует частичные и финальные фразы, которые обновляются в реальном времени.",
+      "The model produces partial and final phrases that update in real time.",
     icon: Activity
   },
   {
-    title: "Субтитры и экспорт",
-    description: "Результат отображается как overlay и отдается в SRT/VTT или burn-in рендер.",
+    title: "Subtitles and export",
+    description: "Output is shown as overlay and exported as SRT/VTT or burn-in render.",
     icon: Download
   }
 ];
@@ -44,40 +44,40 @@ export const landingSteps: LandingStep[] = [
 export const landingFeatures: LandingFeature[] = [
   {
     title: "Live subtitles overlay",
-    description: "Полноэкранный режим с читаемыми субтитрами поверх видео-потока.",
+    description: "Fullscreen mode with readable subtitle overlay on top of video.",
     icon: Captions
   },
   {
     title: "Export SRT/VTT",
-    description: "Выгрузка таймкодов и текста в стандартных форматах для монтажа.",
+    description: "Export timestamps and text in standard editing formats.",
     icon: Download
   },
   {
     title: "Burn-in subtitles",
-    description: "Визуальный стиль субтитров применяется прямо к видео (mock UI).",
+    description: "Apply subtitle styling directly to video (mock UI).",
     icon: Sparkles
   },
   {
     title: "Voiceover TTS",
-    description: "Голосовой режим с выбором профиля озвучки для предпросмотра.",
+    description: "Voice mode with selectable voice profile for preview.",
     icon: Mic2
   },
   {
     title: "Profiles: Speed / Quality",
-    description: "Быстрый отклик или более стабильный результат с мягким переключением.",
+    description: "Fast response or more stable output with smooth switching.",
     icon: Timer
   },
   {
     title: "Status & confidence",
-    description: "Индикаторы подключенности и уверенности распознавания по каждому сегменту.",
+    description: "Connection and confidence indicators for each segment.",
     icon: BadgeCheck
   }
 ];
 
 export const privacyItems = [
-  "UI показывает только демонстрационный поток и mock-данные.",
-  "Никакой фактической отправки видео, камеры или аудио не выполняется.",
-  "Настройки и история существуют только в состоянии текущей сессии интерфейса."
+  "The UI shows only a demo stream with mock data.",
+  "No real video, camera, or audio is uploaded or processed.",
+  "Settings and history exist only in the current frontend session."
 ];
 
 export const signLanguages = [
@@ -91,8 +91,8 @@ export const signLanguages = [
 
 export const outputLanguages = [
   "English",
-  "Русский",
-  "Українська",
+  "Russian",
+  "Ukrainian",
   "Español",
   "Deutsch",
   "Français"
@@ -111,7 +111,7 @@ export const pricingPlans = [
     name: "Free",
     monthly: 0,
     yearly: 0,
-    description: "Прототипы и быстрые проверки UX",
+    description: "Prototypes and fast UX checks",
     cta: "Start for free",
     features: [
       "Live preview (mock)",
@@ -124,7 +124,7 @@ export const pricingPlans = [
     name: "Pro",
     monthly: 24,
     yearly: 19,
-    description: "Для команд, работающих с субтитрами ежедневно",
+    description: "For teams working with subtitles daily",
     cta: "Upgrade to Pro",
     highlighted: true,
     features: [
@@ -138,7 +138,7 @@ export const pricingPlans = [
     name: "Studio",
     monthly: 89,
     yearly: 69,
-    description: "Продакшн-пайплайны и крупные медиакоманды",
+    description: "Production pipelines and larger media teams",
     cta: "Contact sales",
     features: [
       "Multi-project workspaces",
@@ -151,33 +151,33 @@ export const pricingPlans = [
 
 export const docsFaq = [
   {
-    q: "Это реальный ML-пайплайн?",
-    a: "Нет. В этом проекте полностью mock-функционал для демонстрации UX и навигации."
+    q: "Is this a real ML pipeline?",
+    a: "No. This project is fully mock-based to demonstrate UX and navigation."
   },
   {
-    q: "Можно ли загрузить файл и получить результат?",
-    a: "Можно пройти весь UI-процесс, но обработка имитируется на фронте."
+    q: "Can I upload a file and get a result?",
+    a: "You can walk through the full UI flow, but processing is simulated on the frontend."
   },
   {
-    q: "Что сейчас работает по-настоящему?",
-    a: "Роутинг, анимации, формы, интерактивные controls и client-side экспорт текстовых файлов."
+    q: "What works for real right now?",
+    a: "Routing, animations, forms, interactive controls, and client-side text export."
   }
 ];
 
 export const aboutValues = [
   {
     title: "Clarity first",
-    text: "Ставим читаемость субтитров и управляемость интерфейса выше визуального шума.",
+    text: "Subtitle readability and controllable UI are prioritized over visual noise.",
     icon: Captions
   },
   {
     title: "Human-centered",
-    text: "Делаем инструменты, которые сокращают фрикцию между жестами и текстом.",
+    text: "We build tools that reduce friction between sign and text.",
     icon: Sparkles
   },
   {
     title: "Safe by design",
-    text: "В демо-режиме без реальных медиа-потоков, только прозрачные mock-сценарии.",
+    text: "In demo mode, no real media streams are used, only transparent mock flows.",
     icon: Shield
   }
 ];
