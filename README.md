@@ -18,10 +18,46 @@ Next.js 14 frontend prototype for sign language subtitles workflow.
 - `/upload` Upload workflow mock
 - `/jobs/[id]` Job details and export
 - `/history` Job history
-- `/auth` Sign in/up mock
-- `/pricing` Pricing plans
 - `/about` About
 - `/docs` Docs + FAQ
+
+## Landing UX Structure
+
+`/` now follows a clear user path:
+
+1. Hero (`#hero`): value proposition, 2 CTA, quick mode switch, scroll indicator
+2. Mode selector (`#modes`): Realtime vs Video+Editor with benefits and direct actions
+3. How it works (`#how`)
+4. Key features (`#features`)
+5. Demo preview (`#demo`)
+6. Model & architecture (`#model`)
+7. Project status, privacy, roadmap (`#status`)
+8. FAQ (`#faq`)
+9. Final CTA
+
+## UX/Motion Systems
+
+- `components/layout/site-header.tsx`
+  - Fixed header with scrollspy for landing sections
+  - Mobile sheet menu with larger hitboxes
+  - Persistent CTA: `Запустить демо`
+- `components/layout/custom-cursor.tsx`
+  - Desktop-only custom cursor (dot + ring)
+  - Hover states for interactive targets
+  - Disables automatically on touch and reduced-motion
+- `components/sections/home-main.tsx`
+  - Mouse scroll indicator in hero (`scroll -> #modes`)
+  - Mode preselect used by primary CTA
+- `components/layout/reveal.tsx`
+  - Section reveal animations with reduced-motion fallback
+
+## Theme Tokens
+
+Main design tokens are in `styles/globals.css`:
+
+- Color tokens (`--background`, `--foreground`, `--muted`, etc.)
+- Cursor tokens (`--cursor-dot-size`, `--cursor-ring-size`, `--cursor-ring-hover-size`)
+- Reusable classes (`.glass-panel`, `.section-title`, `.section-copy`, `.page-kicker`, `.page-lead`, `.page-head`, `.glass-chip`, `.skip-link`)
 
 ## Run
 
