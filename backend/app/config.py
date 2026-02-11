@@ -22,6 +22,14 @@ class Settings(BaseSettings):
     public_api_base_url: str = "http://localhost:8000"
 
     worker_expire_interval_seconds: int = 20
+    max_request_size_bytes: int = 52428800  # 50 MB for JSON/API requests
+    max_upload_size_bytes: int = 2147483648  # 2 GB for media object upload policy hints
+    allowed_upload_content_types: str = "video/mp4,video/quicktime,video/x-matroska"
+
+    rate_limit_session_create_per_minute: int = 20
+    rate_limit_upload_url_per_minute: int = 60
+    rate_limit_job_create_per_minute: int = 30
+    rate_limit_export_per_minute: int = 60
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -31,4 +39,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-

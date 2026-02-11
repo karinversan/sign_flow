@@ -9,6 +9,7 @@ from app.db import get_db
 from app.models import EditingSession, ExportArtifact, ExportStatus, Job, JobStatus, SessionStatus, TranscriptSegment
 from app.providers.base import ProviderSegment
 from app.providers.registry import get_model_provider
+from app.security import with_rate_limit
 from app.schemas import (
     ExportCreateRequest,
     ExportResponse,
@@ -23,7 +24,15 @@ from app.schemas import (
     UploadUrlResponse,
 )
 from app.services.sessions import compute_expires_at, ensure_session_active, remaining_seconds, utc_now
-from app.storage import create_download_url, create_upload_url, make_export_object_key, make_video_object_key
+from app.services.exports import render_srt, render_txt, render_vtt
+from app.services.uploads import validate_upload_request
+from app.storage import (
+    create_download_url,
+    create_upload_url,
+    make_export_object_key,
+    make_video_object_key,
+    put_text_object,
+)
 
 router = APIRouter(prefix="/v1", tags=["v1"])
 
@@ -99,7 +108,13 @@ def health():
     return {"status": "ok", "service": settings.app_name}
 
 
-@router.post("/sessions", response_model=SessionResponse)
+@router.post(
+    "/sessions",
+    response_model=SessionResponse,
+    dependencies=[
+        Depends(with_rate_limit(settings.rate_limit_session_create_per_minute, "sessions:create")),
+    ],
+)
 def create_session(payload: SessionCreateRequest, db: Session = Depends(get_db)):
     now = utc_now()
     session = EditingSession(
@@ -123,12 +138,19 @@ def get_session(session_id: str, db: Session = Depends(get_db)):
     return _session_to_response(session, active_job_id=active_job.id if active_job else None)
 
 
-@router.post("/sessions/{session_id}/upload-url", response_model=UploadUrlResponse)
+@router.post(
+    "/sessions/{session_id}/upload-url",
+    response_model=UploadUrlResponse,
+    dependencies=[
+        Depends(with_rate_limit(settings.rate_limit_upload_url_per_minute, "sessions:upload-url")),
+    ],
+)
 def create_session_upload_url(session_id: str, payload: UploadUrlRequest, db: Session = Depends(get_db)):
     session = _load_session_or_404(db, session_id)
     ensure_session_active(session)
 
-    object_key = make_video_object_key(session.id, payload.file_name)
+    safe_name = validate_upload_request(payload.file_name, payload.content_type, payload.file_size_bytes)
+    object_key = make_video_object_key(session.id, safe_name)
     upload_url = create_upload_url(object_key, payload.content_type)
 
     session.video_object_key = object_key
@@ -141,7 +163,13 @@ def create_session_upload_url(session_id: str, payload: UploadUrlRequest, db: Se
     )
 
 
-@router.post("/sessions/{session_id}/jobs", response_model=JobResponse)
+@router.post(
+    "/sessions/{session_id}/jobs",
+    response_model=JobResponse,
+    dependencies=[
+        Depends(with_rate_limit(settings.rate_limit_job_create_per_minute, "sessions:create-job")),
+    ],
+)
 def create_job_for_session(session_id: str, payload: JobCreateRequest, db: Session = Depends(get_db)):
     session = _load_session_or_404(db, session_id)
     ensure_session_active(session)
@@ -208,9 +236,24 @@ def patch_job_segments(job_id: str, payload: SegmentsPatchRequest, db: Session =
     segments = db.scalars(stmt).all()
     by_id = {segment.id: segment for segment in segments}
 
+    max_order = max((segment.order_index for segment in segments), default=-1)
+
     for patch in payload.segments:
         segment = by_id.get(patch.id)
         if not segment:
+            segment = TranscriptSegment(
+                id=patch.id,
+                job_id=job.id,
+                order_index=patch.order_index if patch.order_index is not None else max_order + 1,
+                start_sec=patch.start_sec or 0.0,
+                end_sec=patch.end_sec or 0.0,
+                text=patch.text or "",
+                confidence=0.75,
+                version=1,
+            )
+            db.add(segment)
+            by_id[segment.id] = segment
+            max_order = max(max_order, segment.order_index)
             continue
         if patch.order_index is not None:
             segment.order_index = patch.order_index
@@ -260,12 +303,39 @@ def regenerate_job_segments(job_id: str, payload: RegenerateRequest, db: Session
     return [_segment_to_response(segment) for segment in segments]
 
 
-@router.post("/jobs/{job_id}/export", response_model=ExportResponse)
+@router.post(
+    "/jobs/{job_id}/export",
+    response_model=ExportResponse,
+    dependencies=[
+        Depends(with_rate_limit(settings.rate_limit_export_per_minute, "jobs:export")),
+    ],
+)
 def create_export(job_id: str, payload: ExportCreateRequest, db: Session = Depends(get_db)):
     job = _load_job_or_404(db, job_id)
     _assert_job_session_active(db, job)
 
+    stmt = select(TranscriptSegment).where(TranscriptSegment.job_id == job.id).order_by(TranscriptSegment.order_index.asc())
+    segments = db.scalars(stmt).all()
+
+    if payload.format == "SRT":
+        content = render_srt(segments)
+        content_type = "text/plain"
+    elif payload.format == "VTT":
+        content = render_vtt(segments)
+        content_type = "text/vtt"
+    elif payload.format == "TXT":
+        content = render_txt(segments)
+        content_type = "text/plain"
+    elif payload.format == "AUDIO":
+        content = f"Mock audio artifact for job {job.id}\n"
+        content_type = "text/plain"
+    else:
+        content = f"Mock video artifact for job {job.id}\n"
+        content_type = "text/plain"
+
     object_key = make_export_object_key(job.id, payload.format)
+    put_text_object(object_key, content, content_type)
+
     export = ExportArtifact(
         id=str(uuid4()),
         job_id=job.id,
@@ -287,6 +357,11 @@ def create_export(job_id: str, payload: ExportCreateRequest, db: Session = Depen
         download_url=create_download_url(export.object_key),
         created_at=export.created_at,
     )
+
+
+@router.get("/storage/mock/{object_key:path}")
+def get_mock_storage_object(object_key: str):
+    return {"message": "mock_object", "key": object_key}
 
 
 @router.get("/exports/{export_id}", response_model=ExportResponse)

@@ -9,6 +9,7 @@ import {
   Download,
   FileUp,
   Home,
+  Loader2,
   Plus,
   Radio,
   Search,
@@ -33,6 +34,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { outputLanguages, signLanguages, voiceOptions } from "@/lib/mock/data";
 import { defaultTranscript, TranscriptSegment } from "@/lib/mock/jobs";
+import {
+  createExport,
+  createJob,
+  createSession,
+  createUploadUrl,
+  getJobSegments,
+  getSession,
+  patchJobSegments,
+  uploadFileBySignedUrl,
+} from "@/lib/api/backend";
 import { formatSrtTime, formatTimecode, parseTimecodeInput, toSeconds } from "@/lib/utils/timecode";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +51,38 @@ type RenderMode = "subtitles" | "voice" | "both";
 type TimelineZoom = "fit" | 1 | 2 | 4;
 
 const initialSegments: TranscriptSegment[] = defaultTranscript.map((item) => ({ ...item }));
+const SESSION_STORAGE_KEY = "signflow_session_id";
+const JOB_STORAGE_KEY = "signflow_job_id";
+
+function isSessionExpiredMessage(message: string) {
+  return message.includes("session_expired") || message.includes("410");
+}
+
+function getFileNameFromObjectKey(value: string | null | undefined): string {
+  if (!value) return "";
+  const parts = value.split("/");
+  return parts.at(-1)?.replace(/_/g, " ") ?? value;
+}
+
+function mapApiSegmentsToUi(
+  segments: Array<{
+    id: string;
+    order_index: number;
+    start_sec: number;
+    end_sec: number;
+    text: string;
+  }>
+): TranscriptSegment[] {
+  return segments
+    .slice()
+    .sort((a, b) => a.order_index - b.order_index)
+    .map((segment) => ({
+      id: segment.id,
+      start: formatTimecode(segment.start_sec),
+      end: formatTimecode(segment.end_sec),
+      text: segment.text,
+    }));
+}
 
 function createDownload(fileName: string, content: string, mime = "text/plain") {
   const blob = new Blob([content], { type: mime });
@@ -78,6 +121,13 @@ function findSegmentByTime(segments: TranscriptSegment[], second: number) {
 
 export default function UploadPage() {
   const [fileName, setFileName] = useState("");
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(true);
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const [backendError, setBackendError] = useState<string | null>(null);
   const [segments, setSegments] = useState<TranscriptSegment[]>(initialSegments);
   const [activeSegmentId, setActiveSegmentId] = useState(initialSegments[0]?.id ?? "");
   const [segmentQuery, setSegmentQuery] = useState("");
@@ -100,6 +150,7 @@ export default function UploadPage() {
 
   const [originalVolume, setOriginalVolume] = useState(70);
   const [overlayVolume, setOverlayVolume] = useState(75);
+  const isEditorLocked = sessionExpired;
 
   const totalDuration = useMemo(
     () => Math.max(1, ...segments.map((segment) => toSeconds(segment.end))),
@@ -108,6 +159,16 @@ export default function UploadPage() {
   const [playheadSec, setPlayheadSec] = useState(0);
   const zoomLevels: TimelineZoom[] = ["fit", 1, 2, 4];
   const pxPerSecond = timelineZoom === "fit" ? 0 : 14 * timelineZoom;
+
+  const resetSessionState = (expired = false) => {
+    window.localStorage.removeItem(SESSION_STORAGE_KEY);
+    window.localStorage.removeItem(JOB_STORAGE_KEY);
+    setSessionId(null);
+    setJobId(null);
+    setRemainingSeconds(null);
+    setFileName("");
+    setSessionExpired(expired);
+  };
 
   const trackWidthStyle = useMemo(() => {
     if (timelineZoom === "fit") return "100%";
@@ -147,6 +208,74 @@ export default function UploadPage() {
     const nextLeft = Math.max(playheadSec * pxPerSecond - viewport.clientWidth * 0.5, 0);
     viewport.scrollTo({ left: nextLeft, behavior: "auto" });
   }, [playheadSec, timelineZoom, pxPerSecond]);
+
+  useEffect(() => {
+    const restore = async () => {
+      const storedSession = window.localStorage.getItem(SESSION_STORAGE_KEY);
+      const storedJob = window.localStorage.getItem(JOB_STORAGE_KEY);
+      if (!storedSession) {
+        setIsRestoring(false);
+        return;
+      }
+
+      try {
+        const session = await getSession(storedSession);
+        if (session.status !== "ACTIVE") {
+          resetSessionState(true);
+          setIsRestoring(false);
+          return;
+        }
+
+        setSessionId(session.id);
+        setRemainingSeconds(session.remaining_seconds);
+        setSessionExpired(session.remaining_seconds <= 0);
+        if (session.video_object_key) {
+          setFileName(getFileNameFromObjectKey(session.video_object_key));
+        }
+
+        const nextJobId = storedJob || session.active_job_id;
+        if (nextJobId) {
+          setJobId(nextJobId);
+          window.localStorage.setItem(JOB_STORAGE_KEY, nextJobId);
+          const apiSegments = await getJobSegments(nextJobId);
+          const mapped = mapApiSegmentsToUi(apiSegments);
+          if (mapped.length) {
+            setSegments(mapped);
+            setActiveSegmentId(mapped[0].id);
+            setPlayheadSec(toSeconds(mapped[0].start));
+          }
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to restore session";
+        if (isSessionExpiredMessage(message)) {
+          resetSessionState(true);
+        }
+        setBackendError(message);
+      } finally {
+        setIsRestoring(false);
+      }
+    };
+
+    void restore();
+  }, []);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    const timer = window.setInterval(async () => {
+      try {
+        const session = await getSession(sessionId);
+        if (session.status !== "ACTIVE" || session.remaining_seconds <= 0) {
+          setBackendError("Session expired. Start a new upload to continue editing.");
+          resetSessionState(true);
+          return;
+        }
+        setRemainingSeconds(session.remaining_seconds);
+      } catch {
+        // ignore transient poll errors
+      }
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [sessionId]);
 
   const activeSegment = useMemo(
     () => segments.find((segment) => segment.id === activeSegmentId) ?? segments[0],
@@ -201,17 +330,85 @@ export default function UploadPage() {
     selectSegment(next);
   };
 
-  const onFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const onFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    if (isEditorLocked) return;
     const file = event.target.files?.[0];
     if (!file) return;
-    setFileName(file.name);
+    setBackendError(null);
+    setSessionExpired(false);
+    setIsUploading(true);
+    try {
+      let sid = sessionId;
+      if (!sid) {
+        const created = await createSession();
+        sid = created.id;
+        setSessionId(created.id);
+        setRemainingSeconds(created.remaining_seconds);
+        window.localStorage.setItem(SESSION_STORAGE_KEY, created.id);
+      }
+
+      const upload = await createUploadUrl(sid, file.name, file.type || "video/mp4", file.size);
+      await uploadFileBySignedUrl(upload.upload_url, file);
+
+      const job = await createJob(sid);
+      setJobId(job.id);
+      window.localStorage.setItem(JOB_STORAGE_KEY, job.id);
+
+      const apiSegments = await getJobSegments(job.id);
+      const mapped = mapApiSegmentsToUi(apiSegments);
+      if (mapped.length) {
+        setSegments(mapped);
+        setActiveSegmentId(mapped[0].id);
+        setPlayheadSec(toSeconds(mapped[0].start));
+      }
+
+      setFileName(file.name);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Upload flow failed";
+      if (isSessionExpiredMessage(message)) {
+        resetSessionState(true);
+      }
+      setBackendError(message);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const updateSegment = (id: string, patch: Partial<TranscriptSegment>) => {
+    if (isEditorLocked) return;
     setSegments((prev) => prev.map((segment) => (segment.id === id ? { ...segment, ...patch } : segment)));
+
+    if (!jobId) return;
+
+    const payload: {
+      id: string;
+      order_index?: number;
+      start_sec?: number;
+      end_sec?: number;
+      text?: string;
+    } = { id };
+
+    if (patch.text !== undefined) payload.text = patch.text;
+    if (patch.start !== undefined) {
+      const parsed = parseTimecodeInput(patch.start);
+      if (parsed !== null) payload.start_sec = parsed;
+    }
+    if (patch.end !== undefined) {
+      const parsed = parseTimecodeInput(patch.end);
+      if (parsed !== null) payload.end_sec = parsed;
+    }
+
+    void patchJobSegments(jobId, [payload]).catch((error) => {
+      const message = error instanceof Error ? error.message : "Failed to sync segment";
+      if (isSessionExpiredMessage(message)) {
+        resetSessionState(true);
+      }
+      setBackendError(message);
+    });
   };
 
   const addSegment = () => {
+    if (isEditorLocked) return;
     const nextId = `seg_${segments.length + 1}`;
     const start = totalDuration;
     const end = totalDuration + 3;
@@ -223,12 +420,55 @@ export default function UploadPage() {
     };
     setSegments((prev) => [...prev, next]);
     selectSegment(next);
+
+    if (!jobId) return;
+    void patchJobSegments(jobId, [
+      {
+        id: next.id,
+        order_index: segments.length,
+        start_sec: start,
+        end_sec: end,
+        text: next.text,
+      },
+    ]).catch((error) => {
+      const message = error instanceof Error ? error.message : "Failed to add segment";
+      if (isSessionExpiredMessage(message)) {
+        resetSessionState(true);
+      }
+      setBackendError(message);
+    });
   };
 
   const onJumpToTime = () => {
     const parsed = parseTimecodeInput(jumpTo);
     if (parsed === null) return;
     setPlayheadSec(Math.min(Math.max(parsed, 0), totalDuration));
+  };
+
+  const handleExport = async (format: "SRT" | "VTT" | "TXT" | "AUDIO" | "VIDEO") => {
+    if (isEditorLocked) return;
+    try {
+      if (!jobId) {
+        if (format === "SRT") {
+          createDownload(`${fileName || "transcript"}.srt`, toSrt(segments), "text/plain");
+          return;
+        }
+        throw new Error("job_not_ready");
+      }
+
+      const exported = await createExport(jobId, format);
+      const link = document.createElement("a");
+      link.href = exported.download_url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.click();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Export failed";
+      if (isSessionExpiredMessage(message)) {
+        resetSessionState(true);
+      }
+      setBackendError(message);
+    }
   };
 
   return (
@@ -258,19 +498,66 @@ export default function UploadPage() {
           </div>
         </div>
 
+        {(isRestoring || isUploading) && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {isRestoring ? "Restoring active session..." : "Uploading and preparing transcript..."}
+          </div>
+        )}
+
+        {(sessionId || remainingSeconds !== null) && (
+          <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs text-muted-foreground">
+            Session {sessionId ? sessionId.slice(0, 8) : "-"} •
+            {" "}expires in {remainingSeconds !== null ? Math.max(Math.ceil(remainingSeconds / 60), 0) : "-"} min
+          </div>
+        )}
+
+        {sessionExpired && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300/25 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+            <span>Session expired after 45 minutes. Start a new session to continue.</span>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                resetSessionState(false);
+                setBackendError(null);
+              }}
+            >
+              Start new session
+            </Button>
+          </div>
+        )}
+
+        {backendError && (
+          <div className="mb-4 rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+            {backendError}
+          </div>
+        )}
+
         <Card className="border-white/10 bg-black/45">
           <CardHeader>
             <CardTitle>1) Upload video</CardTitle>
             <CardDescription>Upload one file and move directly into the workspace editor.</CardDescription>
           </CardHeader>
           <CardContent>
-            <label className="flex min-h-36 cursor-pointer items-center justify-center gap-3 rounded-2xl border border-dashed border-white/20 bg-white/[0.02] p-6 text-center hover:border-white/30">
+            <label
+              className={cn(
+                "flex min-h-36 items-center justify-center gap-3 rounded-2xl border border-dashed border-white/20 bg-white/[0.02] p-6 text-center",
+                isEditorLocked ? "cursor-not-allowed opacity-55" : "cursor-pointer hover:border-white/30"
+              )}
+            >
               <FileUp className="h-6 w-6 text-white/75" />
               <div>
                 <p className="text-sm font-medium">Choose a video file</p>
                 <p className="text-xs text-muted-foreground">mp4 / mov / mkv (mock)</p>
               </div>
-              <input type="file" accept="video/*" className="hidden" onChange={onFileChange} />
+              <input
+                type="file"
+                accept="video/*"
+                className="hidden"
+                onChange={onFileChange}
+                disabled={isEditorLocked}
+              />
             </label>
             {fileName && (
               <p className="mt-3 text-sm text-muted-foreground">
@@ -282,6 +569,7 @@ export default function UploadPage() {
 
         {fileName && (
           <>
+            <div className={cn(isEditorLocked && "pointer-events-none opacity-60")}>
             <Card className="mt-5 border-white/10 bg-black/45">
               <CardContent className="grid gap-3 p-4 md:grid-cols-3 xl:grid-cols-6">
                 <div className="space-y-1.5 xl:col-span-2">
@@ -582,7 +870,7 @@ export default function UploadPage() {
                     <Button
                       variant="secondary"
                       className="w-full justify-start gap-2"
-                      onClick={() => createDownload(`${fileName}.srt`, toSrt(segments), "text/plain")}
+                      onClick={() => void handleExport("SRT")}
                     >
                       <Download className="h-4 w-4" />
                       Download subtitles (.srt)
@@ -590,13 +878,7 @@ export default function UploadPage() {
                     <Button
                       variant="secondary"
                       className="w-full justify-start gap-2"
-                      onClick={() =>
-                        createDownload(
-                          `${fileName}-voice-track.wav`,
-                          `Mock audio render\nVoice: ${voice}\nVolume: ${overlayVolume}%`,
-                          "audio/wav"
-                        )
-                      }
+                      onClick={() => void handleExport("AUDIO")}
                     >
                       <Volume2 className="h-4 w-4" />
                       Download audio track
@@ -604,23 +886,24 @@ export default function UploadPage() {
                     <Button
                       variant="secondary"
                       className="w-full justify-start gap-2"
-                      onClick={() =>
-                        createDownload(
-                          `${fileName}-full-video.mp4`,
-                          `Mock video export\nMode: ${mode}\nSubtitles: ${subtitleEnabled}\nVoice: ${voiceEnabled}`,
-                          "video/mp4"
-                        )
-                      }
+                      onClick={() => void handleExport("VIDEO")}
                     >
                       <Download className="h-4 w-4" />
                       Download video
                     </Button>
-                    <Button asChild variant="outline" className="mt-2 w-full gap-2">
-                      <Link href="/jobs/upload_mock">
+                    {jobId ? (
+                      <Button asChild variant="outline" className="mt-2 w-full gap-2">
+                        <Link href={`/jobs/${jobId}`}>
+                          <Sparkles className="h-4 w-4" />
+                          Open job editor
+                        </Link>
+                      </Button>
+                    ) : (
+                      <Button variant="outline" className="mt-2 w-full gap-2" disabled>
                         <Sparkles className="h-4 w-4" />
                         Open job editor
-                      </Link>
-                    </Button>
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -717,6 +1000,7 @@ export default function UploadPage() {
                 </div>
               </CardContent>
             </Card>
+            </div>
           </>
         )}
       </div>

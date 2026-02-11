@@ -76,8 +76,16 @@ npm run dev
 - Detailed backend architecture plan: `docs/BACKEND_PLAN.md`
 - Execution tracker: `docs/BACKEND_BACKLOG.md`
 - Phase-1 backend scaffold: `backend/`
+- Frontend can use backend API by setting `NEXT_PUBLIC_API_BASE_URL` (default: `http://localhost:8000/v1`)
+- Backend includes baseline protections: per-endpoint rate limit, upload MIME/size validation, max request size guard.
 - Start backend stack:
 
 ```bash
 docker compose -f docker-compose.backend.yml up --build
+```
+
+- Run backend tests in Docker:
+
+```bash
+docker compose -f docker-compose.backend.yml run --rm api pytest tests -q
 ```

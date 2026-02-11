@@ -23,6 +23,7 @@ class SessionResponse(BaseModel):
 class UploadUrlRequest(BaseModel):
     file_name: str = Field(min_length=1, max_length=255)
     content_type: str = Field(default="video/mp4", min_length=1, max_length=120)
+    file_size_bytes: int | None = Field(default=None, ge=1, le=20_000_000_000)
 
 
 class UploadUrlResponse(BaseModel):
@@ -83,4 +84,3 @@ class ExportResponse(BaseModel):
     object_key: str
     download_url: str
     created_at: datetime
-

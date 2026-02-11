@@ -9,6 +9,7 @@ import {
   Clock3,
   Download,
   Home,
+  Loader2,
   Radio,
   RefreshCcw,
   Search,
@@ -35,10 +36,22 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { defaultTranscript, TranscriptSegment } from "@/lib/mock/jobs";
+import {
+  createExport,
+  getJob,
+  getJobSegments,
+  getSession,
+  patchJobSegments,
+  regenerateJob,
+} from "@/lib/api/backend";
 import { formatSrtTime, formatTimecode, parseTimecodeInput, toSeconds } from "@/lib/utils/timecode";
 
 type PreviewMode = "Original" | "Subtitled" | "Voiceover";
 type TimelineZoom = "fit" | 1 | 2 | 4;
+
+function isSessionExpiredMessage(message: string) {
+  return message.includes("session_expired") || message.includes("410");
+}
 
 function download(name: string, content: string, type = "text/plain") {
   const blob = new Blob([content], { type });
@@ -68,6 +81,20 @@ function toVtt(segments: TranscriptSegment[]) {
   ].join("\n");
 }
 
+function mapApiSegmentsToUi(
+  segments: Array<{ id: string; order_index: number; start_sec: number; end_sec: number; text: string }>
+): TranscriptSegment[] {
+  return segments
+    .slice()
+    .sort((a, b) => a.order_index - b.order_index)
+    .map((segment) => ({
+      id: segment.id,
+      start: formatTimecode(segment.start_sec),
+      end: formatTimecode(segment.end_sec),
+      text: segment.text,
+    }));
+}
+
 function findSegmentByTime(segments: TranscriptSegment[], second: number) {
   const normalized = Math.max(0, Math.floor(second));
   const inside = segments.find((segment) => {
@@ -85,8 +112,15 @@ function findSegmentByTime(segments: TranscriptSegment[], second: number) {
 
 export default function JobDetailsPage() {
   const params = useParams<{ id: string }>();
+  const jobId = String(params.id ?? "");
   const [progress, setProgress] = useState(18);
   const [status, setStatus] = useState<"Processing" | "Done">("Processing");
+  const [isLoading, setIsLoading] = useState(true);
+  const [backendError, setBackendError] = useState<string | null>(null);
+  const [backendReady, setBackendReady] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionRemainingSeconds, setSessionRemainingSeconds] = useState<number | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   const [mode, setMode] = useState<PreviewMode>("Subtitled");
   const [segments, setSegments] = useState<TranscriptSegment[]>(defaultTranscript.map((item) => ({ ...item })));
@@ -130,6 +164,51 @@ export default function JobDetailsPage() {
   };
 
   useEffect(() => {
+    const restore = async () => {
+      setIsLoading(true);
+      try {
+        const job = await getJob(jobId);
+        setSessionId(job.session_id);
+
+        const session = await getSession(job.session_id);
+        if (session.status !== "ACTIVE" || session.remaining_seconds <= 0) {
+          setSessionExpired(true);
+          setSessionRemainingSeconds(0);
+        } else {
+          setSessionExpired(false);
+          setSessionRemainingSeconds(session.remaining_seconds);
+        }
+
+        const apiSegments = await getJobSegments(jobId);
+        const mapped = mapApiSegmentsToUi(apiSegments);
+        if (mapped.length) {
+          setSegments(mapped);
+          setActiveSegmentId(mapped[0].id);
+          setPlayheadSec(toSeconds(mapped[0].start));
+        }
+
+        setStatus(job.status === "done" ? "Done" : "Processing");
+        setProgress(job.progress);
+        setBackendReady(true);
+        setBackendError(null);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to load job from backend";
+        if (isSessionExpiredMessage(message)) {
+          setSessionExpired(true);
+          setSessionRemainingSeconds(0);
+        }
+        setBackendReady(false);
+        setBackendError(message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void restore();
+  }, [jobId]);
+
+  useEffect(() => {
+    if (backendReady) return;
     if (status === "Done") return;
 
     const timer = setInterval(() => {
@@ -143,7 +222,40 @@ export default function JobDetailsPage() {
     }, 900);
 
     return () => clearInterval(timer);
-  }, [status]);
+  }, [status, backendReady]);
+
+  useEffect(() => {
+    if (!backendReady) return;
+    if (status === "Done") return;
+    const timer = setInterval(async () => {
+      try {
+        const job = await getJob(jobId);
+        setProgress(job.progress);
+        setStatus(job.status === "done" ? "Done" : "Processing");
+      } catch {
+        // ignore transient poll failures
+      }
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [backendReady, status, jobId]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    const timer = window.setInterval(async () => {
+      try {
+        const session = await getSession(sessionId);
+        setSessionRemainingSeconds(session.remaining_seconds);
+        if (session.status !== "ACTIVE" || session.remaining_seconds <= 0) {
+          setSessionExpired(true);
+          setBackendError("Session expired. Editing and exports are locked.");
+        }
+      } catch {
+        // Ignore transient session poll errors.
+      }
+    }, 15000);
+
+    return () => window.clearInterval(timer);
+  }, [sessionId]);
 
   const activeFromPlayhead = useMemo(
     () => findSegmentByTime(segments, playheadSec),
@@ -166,7 +278,34 @@ export default function JobDetailsPage() {
   }, [playheadSec, timelineZoom, pxPerSecond]);
 
   const updateSegment = (id: string, patch: Partial<TranscriptSegment>) => {
+    if (controlsLocked) return;
     setSegments((prev) => prev.map((segment) => (segment.id === id ? { ...segment, ...patch } : segment)));
+
+    if (!backendReady) return;
+    const payload: {
+      id: string;
+      start_sec?: number;
+      end_sec?: number;
+      text?: string;
+    } = { id };
+
+    if (patch.start !== undefined) {
+      const parsed = parseTimecodeInput(patch.start);
+      if (parsed !== null) payload.start_sec = parsed;
+    }
+    if (patch.end !== undefined) {
+      const parsed = parseTimecodeInput(patch.end);
+      if (parsed !== null) payload.end_sec = parsed;
+    }
+    if (patch.text !== undefined) payload.text = patch.text;
+
+    void patchJobSegments(jobId, [payload]).catch((error) => {
+      const message = error instanceof Error ? error.message : "Failed to save segment";
+      if (isSessionExpiredMessage(message)) {
+        setSessionExpired(true);
+      }
+      setBackendError(message);
+    });
   };
 
   const activeSegment = useMemo(
@@ -195,6 +334,66 @@ export default function JobDetailsPage() {
     const parsed = parseTimecodeInput(jumpTo);
     if (parsed === null) return;
     setPlayheadSec(Math.min(Math.max(parsed, 0), totalDuration));
+  };
+
+  const handleRegenerate = async () => {
+    if (controlsLocked) return;
+    if (!backendReady) {
+      setSegments((prev) =>
+        prev.map((segment, index) => ({
+          ...segment,
+          text: index % 2 === 0 ? `${segment.text} [refined]` : segment.text
+        }))
+      );
+      return;
+    }
+    try {
+      const regenerated = await regenerateJob(jobId);
+      const mapped = mapApiSegmentsToUi(regenerated);
+      setSegments(mapped);
+      if (mapped.length && !mapped.find((item) => item.id === activeSegmentId)) {
+        setActiveSegmentId(mapped[0].id);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Regenerate failed";
+      if (isSessionExpiredMessage(message)) {
+        setSessionExpired(true);
+      }
+      setBackendError(message);
+    }
+  };
+
+  const handleExport = async (format: "SRT" | "VTT" | "TXT" | "AUDIO" | "VIDEO") => {
+    if (controlsLocked) return;
+    try {
+      if (!backendReady) {
+        if (format === "SRT") {
+          download(`${jobId}.srt`, toSrt(segments), "text/plain");
+          return;
+        }
+        if (format === "VTT") {
+          download(`${jobId}.vtt`, toVtt(segments), "text/vtt");
+          return;
+        }
+        if (format === "TXT") {
+          download(`${jobId}.txt`, transcriptText, "text/plain");
+          return;
+        }
+        throw new Error("export_unavailable");
+      }
+      const exported = await createExport(jobId, format);
+      const link = document.createElement("a");
+      link.href = exported.download_url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.click();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Export failed";
+      if (isSessionExpiredMessage(message)) {
+        setSessionExpired(true);
+      }
+      setBackendError(message);
+    }
   };
 
   const visibleSegments = useMemo(() => {
@@ -242,6 +441,7 @@ export default function JobDetailsPage() {
   }[subtitleSize];
 
   const subtitlePositionClass = subtitlePosition === "bottom" ? "bottom-5" : "top-5";
+  const controlsLocked = sessionExpired;
 
   return (
     <section className="container pb-14 pt-12">
@@ -278,11 +478,37 @@ export default function JobDetailsPage() {
         </div>
       </div>
 
+      {isLoading && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading job data...
+        </div>
+      )}
+
+      {backendError && (
+        <div className="mb-4 rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+          {backendError}
+        </div>
+      )}
+
+      {(sessionId || sessionRemainingSeconds !== null) && (
+        <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs text-muted-foreground">
+          Session {sessionId ? sessionId.slice(0, 8) : "-"} • expires in{" "}
+          {sessionRemainingSeconds !== null ? Math.max(Math.ceil(sessionRemainingSeconds / 60), 0) : "-"} min
+        </div>
+      )}
+
+      {sessionExpired && (
+        <div className="mb-4 rounded-lg border border-amber-300/25 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+          This editing session expired. Open a new upload to continue editing.
+        </div>
+      )}
+
       <Card className="border-white/10 bg-black/50">
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <CardTitle>Job {params.id}</CardTitle>
+              <CardTitle>Job {jobId}</CardTitle>
               <CardDescription>
                 Status: <span className="text-foreground">{status}</span>
               </CardDescription>
@@ -293,7 +519,7 @@ export default function JobDetailsPage() {
         </CardHeader>
       </Card>
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-[1.46fr_0.84fr]">
+      <div className={`mt-5 grid gap-5 lg:grid-cols-[1.46fr_0.84fr] ${controlsLocked ? "pointer-events-none opacity-60" : ""}`}>
         <Card className="min-w-0 border-white/10 bg-black/50">
           <CardHeader>
             <Tabs defaultValue="preview" className="w-full">
@@ -482,14 +708,7 @@ export default function JobDetailsPage() {
                   <Button
                     variant="secondary"
                     className="gap-2"
-                    onClick={() =>
-                      setSegments((prev) =>
-                        prev.map((segment, index) => ({
-                          ...segment,
-                          text: index % 2 === 0 ? `${segment.text} [refined]` : segment.text
-                        }))
-                      )
-                    }
+                    onClick={() => void handleRegenerate()}
                   >
                     <RefreshCcw className="h-4 w-4" />
                     Regenerate captions
@@ -585,7 +804,7 @@ export default function JobDetailsPage() {
             <Button
               variant="secondary"
               className="w-full justify-start gap-2"
-              onClick={() => download(`${params.id}.srt`, toSrt(segments), "text/plain")}
+              onClick={() => void handleExport("SRT")}
             >
               <Download className="h-4 w-4" />
               Download SRT
@@ -593,7 +812,7 @@ export default function JobDetailsPage() {
             <Button
               variant="secondary"
               className="w-full justify-start gap-2"
-              onClick={() => download(`${params.id}.vtt`, toVtt(segments), "text/vtt")}
+              onClick={() => void handleExport("VTT")}
             >
               <Download className="h-4 w-4" />
               Download VTT
@@ -601,13 +820,13 @@ export default function JobDetailsPage() {
             <Button
               variant="secondary"
               className="w-full justify-start gap-2"
-              onClick={() => download(`${params.id}.txt`, transcriptText, "text/plain")}
+              onClick={() => void handleExport("TXT")}
             >
               <Download className="h-4 w-4" />
               Download text
             </Button>
-            <Button variant="outline" className="w-full" disabled>
-              Download video (Coming soon)
+            <Button variant="outline" className="w-full" onClick={() => void handleExport("VIDEO")}>
+              Download video
             </Button>
 
             <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-xs text-muted-foreground">

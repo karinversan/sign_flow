@@ -7,10 +7,14 @@ This folder contains the first executable backend scaffold aligned with `docs/BA
 - FastAPI service with `/v1` endpoints for sessions/jobs/segments/exports.
 - Postgres-backed persistence via SQLAlchemy.
 - 45-minute editing sessions with expiration checks.
+- Session restore flow with frontend lock when session expires.
 - Stub model provider (`ModelProvider` abstraction).
 - MinIO presigned upload/download URL integration.
+- Upload request validation (MIME + size guard).
+- Per-endpoint API rate limits (in-memory baseline).
 - Worker process to expire sessions/jobs in background.
-- Initial unit tests for session TTL logic.
+- Unit tests for session TTL, upload validation, and rate limiting.
+- Alembic migration scaffold (`alembic/`).
 
 ## Run with Docker Compose
 
@@ -22,9 +26,16 @@ docker compose -f docker-compose.backend.yml up --build
 
 API: `http://localhost:8000/v1/health`
 
+## Migrations
+
+Run inside backend container (or local venv):
+
+```bash
+alembic upgrade head
+```
+
 ## Important notes
 
 - This is phase-1 backend scaffolding, not full production inference.
 - The model provider is currently stub-only and can be replaced with HF provider later.
-- DB migrations are not added yet; tables are created at startup for bootstrap.
-
+- API still creates tables at startup for local bootstrap; use Alembic for explicit migration flow.

@@ -62,3 +62,12 @@ def create_download_url(object_key: str) -> str:
     except ClientError:
         return f"{settings.public_api_base_url}/v1/storage/mock/{quote(object_key)}"
 
+
+def put_text_object(object_key: str, content: str, content_type: str) -> None:
+    client = _s3_client()
+    client.put_object(
+        Bucket=settings.s3_bucket,
+        Key=object_key,
+        Body=content.encode("utf-8"),
+        ContentType=content_type,
+    )
