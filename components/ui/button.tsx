@@ -5,18 +5,15 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
-        default:
-          "bg-primary text-primary-foreground hover:bg-primary/85 shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_8px_30px_rgba(62,153,255,0.35)]",
-        secondary:
-          "border border-white/15 bg-white/5 text-foreground hover:bg-white/10",
-        ghost: "text-foreground hover:bg-white/10",
-        outline: "border border-white/15 bg-transparent hover:bg-white/10",
-        destructive:
-          "bg-red-500/80 text-white hover:bg-red-500/70"
+        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        secondary: "border border-white/14 bg-white/5 text-foreground hover:bg-white/10",
+        ghost: "text-foreground hover:bg-white/8",
+        outline: "border border-white/14 bg-transparent hover:bg-white/8",
+        destructive: "bg-white/10 text-foreground hover:bg-white/16"
       },
       size: {
         default: "h-10 px-4 py-2",
@@ -42,11 +39,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
     return (
-      <Comp
-        className={cn(buttonVariants({ variant, size, className }))}
-        ref={ref}
-        {...props}
-      />
+      <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />
     );
   }
 );
