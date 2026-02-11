@@ -78,6 +78,40 @@ def test_upload_to_job_to_export_flow(client):
     assert patched_text in srt_content
 
 
+def test_model_registry_create_and_activate_flow(client):
+    active_response = client.get("/v1/models/active")
+    assert active_response.status_code == 200
+    initial_active_id = active_response.json()["id"]
+
+    create_model_response = client.post(
+        "/v1/models",
+        json={
+            "name": "hf-canary",
+            "hf_repo": "org/signflow-model",
+            "hf_revision": "v2",
+            "framework": "onnx",
+            "activate": False,
+        },
+    )
+    assert create_model_response.status_code == 200
+    created_model_id = create_model_response.json()["id"]
+    assert create_model_response.json()["is_active"] is False
+
+    activate_response = client.post(f"/v1/models/{created_model_id}/activate")
+    assert activate_response.status_code == 200
+    assert activate_response.json()["is_active"] is True
+    assert activate_response.json()["status"] == "active"
+
+    active_after_response = client.get("/v1/models/active")
+    assert active_after_response.status_code == 200
+    assert active_after_response.json()["id"] == created_model_id
+    assert active_after_response.json()["id"] != initial_active_id
+
+    list_response = client.get("/v1/models")
+    assert list_response.status_code == 200
+    assert len(list_response.json()) >= 2
+
+
 def test_expired_session_blocks_mutating_actions(client):
     session_response = client.post("/v1/sessions", json={})
     assert session_response.status_code == 200

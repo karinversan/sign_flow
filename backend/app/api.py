@@ -6,7 +6,17 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import get_db
-from app.models import EditingSession, ExportArtifact, ExportStatus, Job, JobStatus, SessionStatus, TranscriptSegment
+from app.models import (
+    EditingSession,
+    ExportArtifact,
+    ExportStatus,
+    Job,
+    JobStatus,
+    ModelVersion,
+    ModelVersionStatus,
+    SessionStatus,
+    TranscriptSegment,
+)
 from app.providers.base import ProviderSegment
 from app.providers.registry import get_model_provider
 from app.security import with_rate_limit
@@ -15,6 +25,8 @@ from app.schemas import (
     ExportResponse,
     JobCreateRequest,
     JobResponse,
+    ModelVersionCreateRequest,
+    ModelVersionResponse,
     RegenerateRequest,
     SegmentResponse,
     SegmentsPatchRequest,
@@ -25,6 +37,7 @@ from app.schemas import (
 )
 from app.services.sessions import compute_expires_at, ensure_session_active, remaining_seconds, utc_now
 from app.services.exports import render_srt, render_txt, render_vtt
+from app.services.model_versions import activate_model_version, get_active_model_version
 from app.services.uploads import validate_upload_request
 from app.storage import (
     create_download_url,
@@ -82,6 +95,20 @@ def _segment_to_response(segment: TranscriptSegment) -> SegmentResponse:
     )
 
 
+def _model_to_response(model: ModelVersion) -> ModelVersionResponse:
+    return ModelVersionResponse(
+        id=model.id,
+        name=model.name,
+        hf_repo=model.hf_repo,
+        hf_revision=model.hf_revision,
+        framework=model.framework,
+        status=model.status.value,
+        is_active=model.is_active,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+    )
+
+
 def _load_session_or_404(db: Session, session_id: str) -> EditingSession:
     session = db.get(EditingSession, session_id)
     if not session:
@@ -106,6 +133,53 @@ def _assert_job_session_active(db: Session, job: Job) -> EditingSession:
 @router.get("/health")
 def health():
     return {"status": "ok", "service": settings.app_name}
+
+
+@router.get("/models", response_model=list[ModelVersionResponse])
+def list_models(db: Session = Depends(get_db)):
+    stmt = select(ModelVersion).order_by(ModelVersion.created_at.desc())
+    models = db.scalars(stmt).all()
+    return [_model_to_response(model) for model in models]
+
+
+@router.get("/models/active", response_model=ModelVersionResponse)
+def get_active_model(db: Session = Depends(get_db)):
+    model = get_active_model_version(db)
+    if not model:
+        raise HTTPException(status_code=404, detail="active_model_not_found")
+    return _model_to_response(model)
+
+
+@router.post("/models", response_model=ModelVersionResponse)
+def create_model(payload: ModelVersionCreateRequest, db: Session = Depends(get_db)):
+    now = utc_now()
+    model = ModelVersion(
+        name=payload.name,
+        hf_repo=payload.hf_repo,
+        hf_revision=payload.hf_revision,
+        framework=payload.framework,
+        status=ModelVersionStatus.ACTIVE if payload.activate else ModelVersionStatus.STAGING,
+        is_active=payload.activate,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(model)
+    db.commit()
+    db.refresh(model)
+
+    if payload.activate:
+        model = activate_model_version(db, model)
+
+    return _model_to_response(model)
+
+
+@router.post("/models/{model_id}/activate", response_model=ModelVersionResponse)
+def activate_model(model_id: str, db: Session = Depends(get_db)):
+    model = db.get(ModelVersion, model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    activated = activate_model_version(db, model)
+    return _model_to_response(activated)
 
 
 @router.post(
@@ -176,12 +250,21 @@ def create_job_for_session(session_id: str, payload: JobCreateRequest, db: Sessi
     if not session.video_object_key:
         raise HTTPException(status_code=400, detail="video_not_uploaded")
 
+    selected_model_id: str | None = payload.model_version_id
+    if selected_model_id:
+        selected_model = db.get(ModelVersion, selected_model_id)
+        if not selected_model:
+            raise HTTPException(status_code=404, detail="model_not_found")
+    else:
+        active_model = get_active_model_version(db)
+        selected_model_id = active_model.id if active_model else "stub-v0"
+
     now = utc_now()
     job = Job(
         session_id=session.id,
         status=JobStatus.PROCESSING,
         progress=15,
-        model_version_id=payload.model_version_id or "stub-v0",
+        model_version_id=selected_model_id,
         created_at=now,
         updated_at=now,
     )

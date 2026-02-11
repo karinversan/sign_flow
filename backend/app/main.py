@@ -6,14 +6,20 @@ from fastapi.responses import JSONResponse
 
 from app.api import router
 from app.config import settings
-from app.db import Base, engine
+from app.db import Base, SessionLocal, engine
 from app.metrics import install_metrics
+from app.services.model_versions import ensure_default_model_version
 from app.storage import ensure_bucket_exists
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        ensure_default_model_version(db)
+    finally:
+        db.close()
     ensure_bucket_exists()
     yield
 

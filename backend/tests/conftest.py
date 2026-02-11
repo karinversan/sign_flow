@@ -5,8 +5,9 @@ from sqlalchemy import delete
 from app.db import Base, engine
 from app.db import SessionLocal
 from app.main import app
-from app.models import EditingSession, ExportArtifact, Job, TranscriptSegment
+from app.models import EditingSession, ExportArtifact, Job, ModelVersion, TranscriptSegment
 from app.security import rate_limiter
+from app.services.model_versions import ensure_default_model_version
 
 
 @pytest.fixture(autouse=True)
@@ -18,8 +19,10 @@ def reset_test_state():
         db.execute(delete(ExportArtifact))
         db.execute(delete(TranscriptSegment))
         db.execute(delete(Job))
+        db.execute(delete(ModelVersion))
         db.execute(delete(EditingSession))
         db.commit()
+        ensure_default_model_version(db)
     finally:
         db.close()
 
@@ -30,6 +33,7 @@ def reset_test_state():
         db.execute(delete(ExportArtifact))
         db.execute(delete(TranscriptSegment))
         db.execute(delete(Job))
+        db.execute(delete(ModelVersion))
         db.execute(delete(EditingSession))
         db.commit()
     finally:

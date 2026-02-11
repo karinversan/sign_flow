@@ -8,6 +8,26 @@ class SessionCreateRequest(BaseModel):
     user_id: str | None = None
 
 
+class ModelVersionCreateRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=128)
+    hf_repo: str = Field(min_length=3, max_length=255)
+    hf_revision: str = Field(default="main", min_length=1, max_length=128)
+    framework: str = Field(default="stub", min_length=2, max_length=64)
+    activate: bool = False
+
+
+class ModelVersionResponse(BaseModel):
+    id: str
+    name: str
+    hf_repo: str
+    hf_revision: str
+    framework: str
+    status: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
 class SessionResponse(BaseModel):
     id: str
     user_id: str | None

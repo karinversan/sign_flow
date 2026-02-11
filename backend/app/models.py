@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Enum as SqlEnum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Enum as SqlEnum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -30,6 +30,12 @@ class ExportStatus(str, Enum):
     QUEUED = "queued"
     DONE = "done"
     FAILED = "failed"
+
+
+class ModelVersionStatus(str, Enum):
+    STAGING = "staging"
+    ACTIVE = "active"
+    ROLLBACK = "rollback"
 
 
 class EditingSession(Base):
@@ -93,3 +99,18 @@ class ExportArtifact(Base):
 
     job: Mapped["Job"] = relationship("Job", back_populates="exports")
 
+
+class ModelVersion(Base):
+    __tablename__ = "model_versions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    name: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    hf_repo: Mapped[str] = mapped_column(String(255), nullable=False)
+    hf_revision: Mapped[str] = mapped_column(String(128), nullable=False, default="main")
+    framework: Mapped[str] = mapped_column(String(64), nullable=False, default="stub")
+    status: Mapped[ModelVersionStatus] = mapped_column(
+        SqlEnum(ModelVersionStatus), default=ModelVersionStatus.STAGING, nullable=False
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, nullable=False)
