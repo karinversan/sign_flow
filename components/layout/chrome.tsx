@@ -11,7 +11,7 @@ export function Chrome({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {!isLive && <SiteHeader />}
+      <SiteHeader />
       {children}
       {!isLive && <SiteFooter />}
     </>
