@@ -13,6 +13,21 @@ REQUEST_LATENCY = Histogram(
     "HTTP request latency in seconds",
     ["method", "path"],
 )
+JOB_PROCESS_COUNT = Counter(
+    "signflow_job_process_total",
+    "Total processed jobs by outcome",
+    ["outcome"],
+)
+JOB_PROCESS_LATENCY = Histogram(
+    "signflow_job_process_latency_seconds",
+    "Job processing latency in seconds",
+    ["outcome"],
+)
+
+
+def observe_job_processing(outcome: str, elapsed_seconds: float) -> None:
+    JOB_PROCESS_COUNT.labels(outcome).inc()
+    JOB_PROCESS_LATENCY.labels(outcome).observe(max(elapsed_seconds, 0.0))
 
 
 def install_metrics(app: FastAPI) -> None:
@@ -29,4 +44,3 @@ def install_metrics(app: FastAPI) -> None:
     @app.get("/metrics", include_in_schema=False)
     def metrics():
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
-

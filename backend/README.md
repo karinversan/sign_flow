@@ -17,6 +17,7 @@ This folder contains the first executable backend scaffold aligned with `docs/BA
 - Worker process to expire sessions/jobs in background.
 - Queue-based async inference pipeline (Redis list + worker), toggle via `ASYNC_JOB_PROCESSING_ENABLED`.
 - Worker retry policy with dead-letter queue for non-recoverable jobs.
+- Monitoring stack with Prometheus alerts and provisioned Grafana dashboard.
 - Unit tests for session TTL, upload validation, and rate limiting.
 - Integration tests for API flow with Postgres + MinIO.
 - Alembic migration scaffold (`alembic/`).
@@ -30,6 +31,9 @@ docker compose -f docker-compose.backend.yml up --build
 ```
 
 API: `http://localhost:8000/v1/health`
+
+Prometheus: `http://localhost:9090`  
+Grafana: `http://localhost:3005` (admin/admin)
 
 ## Migrations
 
