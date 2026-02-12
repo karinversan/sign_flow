@@ -6,6 +6,8 @@ export type ApiSession = {
   expires_at: string;
   last_activity_at: string;
   video_object_key: string | null;
+  video_ready: boolean;
+  video_download_url: string | null;
   remaining_seconds: number;
   active_job_id: string | null;
 };

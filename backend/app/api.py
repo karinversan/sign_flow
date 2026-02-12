@@ -49,6 +49,7 @@ from app.storage import (
     create_upload_url,
     make_export_object_key,
     make_video_object_key,
+    object_exists,
     put_text_object,
 )
 
@@ -63,6 +64,8 @@ def _mark_expired_if_needed(session: EditingSession, db: Session) -> None:
 
 
 def _session_to_response(session: EditingSession, active_job_id: str | None) -> SessionResponse:
+    has_uploaded_video = bool(session.video_object_key) and object_exists(session.video_object_key or "")
+    video_download_url = create_download_url(session.video_object_key) if has_uploaded_video else None
     return SessionResponse(
         id=session.id,
         user_id=session.user_id,
@@ -71,6 +74,8 @@ def _session_to_response(session: EditingSession, active_job_id: str | None) -> 
         expires_at=session.expires_at,
         last_activity_at=session.last_activity_at,
         video_object_key=session.video_object_key,
+        video_ready=has_uploaded_video,
+        video_download_url=video_download_url,
         remaining_seconds=remaining_seconds(session.expires_at),
         active_job_id=active_job_id,
     )
@@ -374,6 +379,8 @@ def create_job_for_session(
     _assert_session_access(session, principal)
     ensure_session_active(session)
     if not session.video_object_key:
+        raise HTTPException(status_code=400, detail="video_not_uploaded")
+    if not object_exists(session.video_object_key):
         raise HTTPException(status_code=400, detail="video_not_uploaded")
 
     try:

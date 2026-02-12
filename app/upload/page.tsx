@@ -67,6 +67,22 @@ function getFileNameFromObjectKey(value: string | null | undefined): string {
   return parts.at(-1)?.replace(/_/g, " ") ?? value;
 }
 
+function humanizeUploadError(message: string, uploaded = false): string {
+  if (message.includes("Failed to fetch")) {
+    return "Cannot reach backend upload API. Check that backend is running on localhost:8000.";
+  }
+  if (message.startsWith("upload_failed_")) {
+    return "Video upload failed. Check backend/minio availability and try again.";
+  }
+  if (message === "video_not_uploaded") {
+    return "Upload has not completed yet. Please upload the video again.";
+  }
+  if (uploaded && message === "job_not_ready") {
+    return "Video uploaded, but transcript job is not ready yet. Retry in a few seconds.";
+  }
+  return message;
+}
+
 function mapApiSegmentsToUi(
   segments: Array<{
     id: string;
@@ -181,7 +197,7 @@ export default function UploadPage() {
   }, []);
 
   const resetEditorState = useCallback(() => {
-    if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+    if (videoPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(videoPreviewUrl);
     setVideoPreviewUrl(null);
     setIsVideoPlaying(false);
     setVideoDurationSec(0);
@@ -259,8 +275,14 @@ export default function UploadPage() {
         setSessionId(session.id);
         setRemainingSeconds(session.remaining_seconds);
         setSessionExpired(session.remaining_seconds <= 0);
-        if (session.video_object_key) {
+        if (session.video_object_key && session.video_ready) {
           setFileName(getFileNameFromObjectKey(session.video_object_key));
+          if (session.video_download_url) {
+            setVideoPreviewUrl(session.video_download_url);
+          }
+        } else {
+          setFileName("");
+          setVideoPreviewUrl(null);
         }
 
         const nextJobId = storedJob || session.active_job_id;
@@ -300,16 +322,22 @@ export default function UploadPage() {
           return;
         }
         setRemainingSeconds(session.remaining_seconds);
+        if (!fileName && session.video_object_key && session.video_ready) {
+          setFileName(getFileNameFromObjectKey(session.video_object_key));
+          if (session.video_download_url) {
+            setVideoPreviewUrl(session.video_download_url);
+          }
+        }
       } catch {
         // ignore transient poll errors
       }
     }, 15000);
     return () => window.clearInterval(timer);
-  }, [sessionId, startFreshSession]);
+  }, [fileName, sessionId, startFreshSession]);
 
   useEffect(() => {
     return () => {
-      if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+      if (videoPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(videoPreviewUrl);
     };
   }, [videoPreviewUrl]);
 
@@ -388,6 +416,7 @@ export default function UploadPage() {
     setSessionExpired(false);
     setIsUploading(true);
     const previewUrl = URL.createObjectURL(file);
+    let uploadCompleted = false;
     try {
       let sid = sessionId;
       if (!sid) {
@@ -400,6 +429,11 @@ export default function UploadPage() {
 
       const upload = await createUploadUrl(sid, file.name, file.type || "video/mp4", file.size);
       await uploadFileBySignedUrl(upload.upload_url, file);
+      uploadCompleted = true;
+
+      setFileName(file.name);
+      if (videoPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(videoPreviewUrl);
+      setVideoPreviewUrl(previewUrl);
 
       const job = await createJob(sid);
       setJobId(job.id);
@@ -413,16 +447,15 @@ export default function UploadPage() {
         setPlayheadSec(toSeconds(mapped[0].start));
       }
 
-      setFileName(file.name);
-      if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
-      setVideoPreviewUrl(previewUrl);
     } catch (error) {
-      URL.revokeObjectURL(previewUrl);
+      if (!uploadCompleted) {
+        URL.revokeObjectURL(previewUrl);
+      }
       const message = error instanceof Error ? error.message : "Upload flow failed";
       if (isSessionExpiredMessage(message)) {
         startFreshSession(true);
       }
-      setBackendError(message);
+      setBackendError(humanizeUploadError(message, uploadCompleted));
     } finally {
       setIsUploading(false);
       event.target.value = "";

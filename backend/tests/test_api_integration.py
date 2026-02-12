@@ -98,6 +98,34 @@ def test_upload_to_job_to_export_flow(client):
     assert patched_text in srt_content
 
 
+def test_session_requires_actual_uploaded_object_before_job_creation(client):
+    session_response = client.post("/v1/sessions", json={"user_id": "int-test"})
+    assert session_response.status_code == 200
+    session_id = session_response.json()["id"]
+
+    upload_url_response = client.post(
+        f"/v1/sessions/{session_id}/upload-url",
+        json={
+            "file_name": "missing-upload.mp4",
+            "content_type": "video/mp4",
+            "file_size_bytes": 1024,
+        },
+    )
+    assert upload_url_response.status_code == 200
+    object_key = upload_url_response.json()["object_key"]
+
+    session_after_upload_url = client.get(f"/v1/sessions/{session_id}")
+    assert session_after_upload_url.status_code == 200
+    payload = session_after_upload_url.json()
+    assert payload["video_object_key"] == object_key
+    assert payload["video_ready"] is False
+    assert payload["video_download_url"] is None
+
+    create_job_response = client.post(f"/v1/sessions/{session_id}/jobs", json={})
+    assert create_job_response.status_code == 400
+    assert create_job_response.json()["detail"] == "video_not_uploaded"
+
+
 def test_model_registry_create_and_activate_flow(client):
     active_response = client.get("/v1/models/active")
     assert active_response.status_code == 200

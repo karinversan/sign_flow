@@ -99,6 +99,15 @@ def create_download_url(object_key: str) -> str:
         return f"{settings.public_api_base_url}/v1/storage/mock/{quote(object_key)}"
 
 
+def object_exists(object_key: str) -> bool:
+    client = _s3_client()
+    try:
+        client.head_object(Bucket=settings.s3_bucket, Key=object_key)
+        return True
+    except Exception:
+        return False
+
+
 def put_text_object(object_key: str, content: str, content_type: str) -> None:
     client = _s3_client()
     client.put_object(

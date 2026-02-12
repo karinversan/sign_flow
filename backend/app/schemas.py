@@ -39,6 +39,8 @@ class SessionResponse(BaseModel):
     expires_at: datetime
     last_activity_at: datetime
     video_object_key: str | None
+    video_ready: bool = False
+    video_download_url: str | None = None
     remaining_seconds: int
     active_job_id: str | None
 
