@@ -33,7 +33,6 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { outputLanguages, signLanguages, voiceOptions } from "@/lib/mock/data";
 import { defaultTranscript, TranscriptSegment } from "@/lib/mock/jobs";
@@ -164,6 +163,8 @@ export default function UploadPage() {
   const [signLanguage, setSignLanguage] = useState("ASL");
   const [outputLanguage, setOutputLanguage] = useState("English");
   const [mode, setMode] = useState<RenderMode>("both");
+  const allowsSubtitles = mode !== "voice";
+  const allowsVoiceover = mode !== "subtitles";
 
   const [subtitleEnabled, setSubtitleEnabled] = useState(true);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
@@ -177,6 +178,21 @@ export default function UploadPage() {
   const [originalVolume, setOriginalVolume] = useState(70);
   const [overlayVolume, setOverlayVolume] = useState(75);
   const isEditorLocked = sessionExpired;
+
+  useEffect(() => {
+    if (mode === "subtitles") {
+      setSubtitleEnabled(true);
+      setVoiceEnabled(false);
+      return;
+    }
+    if (mode === "voice") {
+      setSubtitleEnabled(false);
+      setVoiceEnabled(true);
+      return;
+    }
+    setSubtitleEnabled(true);
+    setVoiceEnabled(true);
+  }, [mode]);
 
   const totalDuration = useMemo(
     () => Math.max(1, ...segments.map((segment) => toSeconds(segment.end))),
@@ -973,29 +989,17 @@ export default function UploadPage() {
                     <CardTitle>3) Output controls</CardTitle>
                     <CardDescription>All key parameters in one panel.</CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <Tabs defaultValue="subtitles">
-                      <TabsList className="w-full">
-                        <TabsTrigger value="subtitles">Subtitles</TabsTrigger>
-                        <TabsTrigger value="audio">Audio</TabsTrigger>
-                      </TabsList>
+                  <CardContent className="space-y-4">
+                    <div className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs text-muted-foreground">
+                      Render mode:{" "}
+                      <span className="text-foreground">
+                        {mode === "subtitles" ? "Subtitles only" : mode === "voice" ? "Voiceover only" : "Subtitles + Voiceover"}
+                      </span>
+                    </div>
 
-                      <TabsContent value="subtitles" className="space-y-3 pt-3">
-                        <div className="space-y-1.5">
-                          <Label>Voice</Label>
-                          <Select value={voice} onValueChange={setVoice}>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {voiceOptions.map((item) => (
-                                <SelectItem key={item.value} value={item.value}>
-                                  {item.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                    {allowsSubtitles && (
+                      <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                        <p className="text-sm font-medium">Subtitles</p>
                         <div className="grid gap-3 sm:grid-cols-2">
                           <div className="space-y-1.5">
                             <Label>Size</Label>
@@ -1047,39 +1051,55 @@ export default function UploadPage() {
                             />
                           </div>
                         </div>
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
-                            <span className="text-sm">Subtitles</span>
-                            <Switch checked={subtitleEnabled} onCheckedChange={setSubtitleEnabled} />
-                          </div>
-                          <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
-                            <span className="text-sm">Voiceover</span>
-                            <Switch checked={voiceEnabled} onCheckedChange={setVoiceEnabled} />
-                          </div>
+                        <div className="flex items-center justify-between rounded-lg border border-white/10 bg-black/25 px-3 py-2">
+                          <Label htmlFor="subtitle-switch">Subtitles enabled</Label>
+                          <Switch id="subtitle-switch" checked={subtitleEnabled} onCheckedChange={setSubtitleEnabled} />
                         </div>
-                        <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
+                        <div className="flex items-center justify-between rounded-lg border border-white/10 bg-black/25 px-3 py-2">
                           <Label htmlFor="subtitle-bg">Subtitle background</Label>
                           <Switch id="subtitle-bg" checked={subtitleBackground} onCheckedChange={setSubtitleBackground} />
                         </div>
-                      </TabsContent>
+                      </div>
+                    )}
 
-                      <TabsContent value="audio" className="space-y-3 pt-3">
-                        <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+                    {allowsVoiceover && (
+                      <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                        <p className="text-sm font-medium">Voiceover</p>
+                        <div className="space-y-1.5">
+                          <Label>Voice type</Label>
+                          <Select value={voice} onValueChange={setVoice}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {voiceOptions.map((item) => (
+                                <SelectItem key={item.value} value={item.value}>
+                                  {item.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg border border-white/10 bg-black/25 px-3 py-2">
+                          <Label htmlFor="voice-switch">Voiceover enabled</Label>
+                          <Switch id="voice-switch" checked={voiceEnabled} onCheckedChange={setVoiceEnabled} />
+                        </div>
+                        <div className="rounded-lg border border-white/10 bg-black/25 p-3">
                           <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
                             <span>Original video volume</span>
                             <span>{originalVolume}%</span>
                           </div>
                           <Slider value={[originalVolume]} onValueChange={(v) => setOriginalVolume(v[0] ?? 70)} max={100} />
                         </div>
-                        <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+                        <div className="rounded-lg border border-white/10 bg-black/25 p-3">
                           <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
-                            <span>Overlay voice volume</span>
+                            <span>Voiceover volume</span>
                             <span>{overlayVolume}%</span>
                           </div>
                           <Slider value={[overlayVolume]} onValueChange={(v) => setOverlayVolume(v[0] ?? 75)} max={100} />
                         </div>
-                      </TabsContent>
-                    </Tabs>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
