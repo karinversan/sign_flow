@@ -54,6 +54,19 @@ curl -s -X POST http://localhost:8000/v1/models \
 curl -s -X POST http://localhost:8000/v1/models/<model-id>/sync
 ```
 
+### Artifact-driven HF output (without real model runtime)
+
+If synced model artifacts contain `segments.json` (or `transcript.txt`), HF provider uses that content as subtitle output.
+
+Example `segments.json`:
+
+```json
+[
+  {"start_sec": 0.0, "end_sec": 2.8, "text": "Intro line", "confidence": 0.92},
+  {"start_sec": 2.8, "end_sec": 6.4, "text": "Second line", "confidence": 0.88}
+]
+```
+
 ## Important notes
 
 - This is phase-1 backend scaffolding, not full production inference.

@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from app.config import settings
@@ -23,6 +24,35 @@ def ensure_model_artifacts(model_id: str, hf_repo: str, hf_revision: str) -> str
             marker.write_text(
                 "Local placeholder model artifacts.\n"
                 f"model_id={model_id}\nrepo={hf_repo}\nrevision={hf_revision}\n",
+                encoding="utf-8",
+            )
+        segments_file = model_dir / "segments.json"
+        if not segments_file.exists():
+            segments_file.write_text(
+                json.dumps(
+                    [
+                        {
+                            "start_sec": 0.0,
+                            "end_sec": 3.4,
+                            "text": f"[{model_id}] Local artifact segment one.",
+                            "confidence": 0.93,
+                        },
+                        {
+                            "start_sec": 3.4,
+                            "end_sec": 7.1,
+                            "text": "Runtime reads subtitle blocks from model artifacts.",
+                            "confidence": 0.9,
+                        },
+                        {
+                            "start_sec": 7.1,
+                            "end_sec": 11.0,
+                            "text": "Swap the model files and re-sync to update output.",
+                            "confidence": 0.88,
+                        },
+                    ],
+                    ensure_ascii=True,
+                    indent=2,
+                ),
                 encoding="utf-8",
             )
         return str(model_dir)
