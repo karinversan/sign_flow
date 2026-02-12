@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: signflow-inference-gpu
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: signflow-inference-gpu
+  template:
+    metadata:
+      labels:
+        app: signflow-inference-gpu
+    spec:
+      nodeSelector:
+        accelerator: nvidia
+      containers:
+        - name: inference
+          image: your-registry/signflow-inference:latest
+          resources:
+            requests:
+              cpu: "2"
+              memory: "4Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "4"
+              memory: "8Gi"
+              nvidia.com/gpu: "1"
+          env:
+            - name: MODEL_PROVIDER
+              value: "hf"
+            - name: ASYNC_JOB_PROCESSING_ENABLED
+              value: "true"

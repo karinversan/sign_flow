@@ -76,6 +76,29 @@ When user doesn't specify `model_version_id` during job creation, backend can ro
 
 Routing is deterministic per session id (hash bucket).
 
+## Auth baseline (API key)
+
+- Enable with `AUTH_ENABLED=true`.
+- User keys: `AUTH_API_KEYS=key1,key2` (require `x-user-id` header).
+- Admin keys: `AUTH_ADMIN_API_KEYS=adminkey` (can mutate model registry/sync).
+
+When auth is disabled (default), API keeps current anonymous behavior for frontend prototypes.
+
+## Audit persistence and retention
+
+- Events are logged via `signflow.audit` and persisted into `audit_events` when `AUDIT_PERSIST_ENABLED=true`.
+- Worker prunes old rows using:
+  - `AUDIT_RETENTION_DAYS`
+  - `AUDIT_CLEANUP_BATCH_SIZE`
+  - `WORKER_AUDIT_CLEANUP_INTERVAL_SECONDS`
+
+## Ops templates
+
+- Triton compose profile: `backend/ops/docker-compose.triton.yml`
+- Triton evaluation runbook: `backend/ops/TRITON_EVALUATION.md`
+- KEDA autoscaling template: `backend/ops/keda/scaledobject-inference-worker.yaml`
+- GPU deployment template: `backend/ops/kubernetes/inference-gpu-deployment.yaml`
+
 ## Important notes
 
 - This is phase-1 backend scaffolding, not full production inference.
