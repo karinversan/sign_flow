@@ -38,7 +38,12 @@ def expire_sessions() -> int:
 
 
 def handle_dequeued_job(message: QueueJobMessage) -> str:
-    result = process_job_by_id(message.job_id)
+    try:
+        result = process_job_by_id(message.job_id)
+    except Exception as exc:
+        # Keep worker loop alive; failed job will follow normal retry/DLQ strategy.
+        print(f"job processing raised exception for job={message.job_id}: {exc}")
+        result = "failed"
     if result == "done":
         return "done"
 

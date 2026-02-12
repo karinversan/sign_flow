@@ -47,3 +47,21 @@ def test_handle_dequeued_job_pushes_expired_to_dead_letter(monkeypatch):
     assert outcome == "expired"
     assert len(dead_letters) == 1
     assert dead_letters[0][1] == "expired"
+
+
+def test_handle_dequeued_job_requeues_when_processing_raises(monkeypatch):
+    def _raise(_job_id: str):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(worker_main, "process_job_by_id", _raise)
+    requeued: list[QueueJobMessage] = []
+    dead_letters: list[tuple[QueueJobMessage, str]] = []
+
+    monkeypatch.setattr(worker_main, "requeue_inference_job", lambda message: requeued.append(message))
+    monkeypatch.setattr(worker_main, "push_dead_letter", lambda message, reason: dead_letters.append((message, reason)))
+    monkeypatch.setattr(worker_main.settings, "worker_job_max_retries", 2)
+
+    outcome = worker_main.handle_dequeued_job(QueueJobMessage(job_id="job-4", attempt=1))
+    assert outcome == "retry"
+    assert len(requeued) == 1
+    assert dead_letters == []

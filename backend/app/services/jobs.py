@@ -1,3 +1,4 @@
+from pathlib import Path
 from time import perf_counter
 from typing import Literal
 
@@ -46,6 +47,7 @@ def process_job_by_id(job_id: str) -> JobProcessResult:
         db.commit()
 
         provider = get_model_provider()
+        model: ModelVersion | None = None
         model_repo: str | None = None
         model_revision: str | None = None
         model_artifact_path: str | None = None
@@ -54,11 +56,19 @@ def process_job_by_id(job_id: str) -> JobProcessResult:
             if model:
                 model_repo = model.hf_repo
                 model_revision = model.hf_revision
-
-        if provider.name == "huggingface" and model_repo and model_revision:
-            model_artifact_path = ensure_model_artifacts(job.model_version_id or "unknown", model_repo, model_revision)
+                if model.artifact_path and Path(model.artifact_path).exists():
+                    model_artifact_path = model.artifact_path
 
         try:
+            if provider.name == "huggingface" and model_repo and model_revision and not model_artifact_path:
+                model_artifact_path = ensure_model_artifacts(job.model_version_id or "unknown", model_repo, model_revision)
+                if model:
+                    sync_time = utc_now()
+                    model.artifact_path = model_artifact_path
+                    model.downloaded_at = sync_time
+                    model.last_sync_error = None
+                    model.updated_at = sync_time
+
             generated = provider.transcribe(
                 session.video_object_key,
                 options={
@@ -69,7 +79,10 @@ def process_job_by_id(job_id: str) -> JobProcessResult:
                     "artifact_path": model_artifact_path,
                 },
             )
-        except Exception:
+        except Exception as exc:
+            if model:
+                model.last_sync_error = str(exc)
+                model.updated_at = utc_now()
             job.status = JobStatus.FAILED
             job.updated_at = utc_now()
             db.commit()
