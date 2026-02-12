@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -36,6 +36,7 @@ from app.schemas import (
     UploadUrlResponse,
 )
 from app.services.sessions import compute_expires_at, ensure_session_active, remaining_seconds, utc_now
+from app.services.audit import audit_log
 from app.services.exports import render_srt, render_txt, render_vtt
 from app.services.model_routing import select_model_version_id
 from app.services.model_versions import activate_model_version, get_active_model_version, sync_model_version_artifacts
@@ -165,7 +166,7 @@ def get_active_model(db: Session = Depends(get_db)):
 
 
 @router.post("/models", response_model=ModelVersionResponse)
-def create_model(payload: ModelVersionCreateRequest, db: Session = Depends(get_db)):
+def create_model(payload: ModelVersionCreateRequest, request: Request, db: Session = Depends(get_db)):
     now = utc_now()
     model = ModelVersion(
         name=payload.name,
@@ -184,30 +185,41 @@ def create_model(payload: ModelVersionCreateRequest, db: Session = Depends(get_d
     if payload.activate:
         model = activate_model_version(db, model)
 
+    audit_log(
+        "model.create",
+        request=request,
+        model_id=model.id,
+        name=model.name,
+        status=model.status.value,
+        active=model.is_active,
+    )
     return _model_to_response(model)
 
 
 @router.post("/models/{model_id}/activate", response_model=ModelVersionResponse)
-def activate_model(model_id: str, db: Session = Depends(get_db)):
+def activate_model(model_id: str, request: Request, db: Session = Depends(get_db)):
     model = db.get(ModelVersion, model_id)
     if not model:
         raise HTTPException(status_code=404, detail="model_not_found")
     activated = activate_model_version(db, model)
+    audit_log("model.activate", request=request, model_id=activated.id, status=activated.status.value)
     return _model_to_response(activated)
 
 
 @router.post("/models/{model_id}/sync", response_model=ModelVersionResponse)
-def sync_model(model_id: str, db: Session = Depends(get_db)):
+def sync_model(model_id: str, request: Request, db: Session = Depends(get_db)):
     model = db.get(ModelVersion, model_id)
     if not model:
         raise HTTPException(status_code=404, detail="model_not_found")
     try:
         synced = sync_model_version_artifacts(db, model)
+        audit_log("model.sync", request=request, model_id=synced.id, artifact_path=synced.artifact_path)
         return _model_to_response(synced)
     except Exception as exc:
         model.last_sync_error = str(exc)
         model.updated_at = utc_now()
         db.commit()
+        audit_log("model.sync_failed", request=request, model_id=model.id, error=str(exc))
         raise HTTPException(status_code=502, detail="model_sync_failed") from exc
 
 
@@ -218,7 +230,7 @@ def sync_model(model_id: str, db: Session = Depends(get_db)):
         Depends(with_rate_limit(settings.rate_limit_session_create_per_minute, "sessions:create")),
     ],
 )
-def create_session(payload: SessionCreateRequest, db: Session = Depends(get_db)):
+def create_session(payload: SessionCreateRequest, request: Request, db: Session = Depends(get_db)):
     now = utc_now()
     session = EditingSession(
         user_id=payload.user_id,
@@ -230,6 +242,7 @@ def create_session(payload: SessionCreateRequest, db: Session = Depends(get_db))
     db.add(session)
     db.commit()
     db.refresh(session)
+    audit_log("session.create", request=request, user_id=session.user_id, session_id=session.id)
     return _session_to_response(session, active_job_id=None)
 
 
@@ -248,7 +261,7 @@ def get_session(session_id: str, db: Session = Depends(get_db)):
         Depends(with_rate_limit(settings.rate_limit_upload_url_per_minute, "sessions:upload-url")),
     ],
 )
-def create_session_upload_url(session_id: str, payload: UploadUrlRequest, db: Session = Depends(get_db)):
+def create_session_upload_url(session_id: str, payload: UploadUrlRequest, request: Request, db: Session = Depends(get_db)):
     session = _load_session_or_404(db, session_id)
     ensure_session_active(session)
 
@@ -259,6 +272,7 @@ def create_session_upload_url(session_id: str, payload: UploadUrlRequest, db: Se
     session.video_object_key = object_key
     session.last_activity_at = utc_now()
     db.commit()
+    audit_log("session.upload_url", request=request, session_id=session.id, object_key=object_key)
     return UploadUrlResponse(
         object_key=object_key,
         upload_url=upload_url,
@@ -273,7 +287,7 @@ def create_session_upload_url(session_id: str, payload: UploadUrlRequest, db: Se
         Depends(with_rate_limit(settings.rate_limit_job_create_per_minute, "sessions:create-job")),
     ],
 )
-def create_job_for_session(session_id: str, payload: JobCreateRequest, db: Session = Depends(get_db)):
+def create_job_for_session(session_id: str, payload: JobCreateRequest, request: Request, db: Session = Depends(get_db)):
     session = _load_session_or_404(db, session_id)
     ensure_session_active(session)
     if not session.video_object_key:
@@ -300,6 +314,14 @@ def create_job_for_session(session_id: str, payload: JobCreateRequest, db: Sessi
     db.add(job)
     db.commit()
     job_id = job.id
+    audit_log(
+        "job.create",
+        request=request,
+        session_id=session.id,
+        job_id=job_id,
+        model_version_id=selected_model_id,
+        async_mode=settings.async_job_processing_enabled,
+    )
 
     if settings.async_job_processing_enabled:
         try:
@@ -416,7 +438,7 @@ def regenerate_job_segments(job_id: str, payload: RegenerateRequest, db: Session
         Depends(with_rate_limit(settings.rate_limit_export_per_minute, "jobs:export")),
     ],
 )
-def create_export(job_id: str, payload: ExportCreateRequest, db: Session = Depends(get_db)):
+def create_export(job_id: str, payload: ExportCreateRequest, request: Request, db: Session = Depends(get_db)):
     job = _load_job_or_404(db, job_id)
     _assert_job_session_active(db, job)
 
@@ -453,6 +475,14 @@ def create_export(job_id: str, payload: ExportCreateRequest, db: Session = Depen
     db.add(export)
     db.commit()
     db.refresh(export)
+    audit_log(
+        "job.export",
+        request=request,
+        job_id=job.id,
+        export_id=export.id,
+        format=payload.format,
+        object_key=object_key,
+    )
 
     return ExportResponse(
         id=export.id,

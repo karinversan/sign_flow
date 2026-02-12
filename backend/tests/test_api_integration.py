@@ -29,6 +29,17 @@ def test_health_includes_provider_metadata(client):
     assert payload["status"] == "ok"
     assert "provider" in payload
     assert "provider" in payload["provider"]
+    assert "routing" in payload
+    assert health_response.headers.get("x-content-type-options") == "nosniff"
+    assert health_response.headers.get("x-frame-options") == "DENY"
+    assert health_response.headers.get("x-request-id")
+
+
+def test_request_id_is_echoed(client):
+    request_id = "int-test-request-id"
+    response = client.get("/v1/health", headers={"x-request-id": request_id})
+    assert response.status_code == 200
+    assert response.headers.get("x-request-id") == request_id
 
 
 def test_upload_to_job_to_export_flow(client):

@@ -79,5 +79,7 @@ Routing is deterministic per session id (hash bucket).
 ## Important notes
 
 - This is phase-1 backend scaffolding, not full production inference.
-- The model provider is currently stub-only and can be replaced with HF provider later.
+- HF provider supports artifact-driven output (`segments.json` / `transcript.txt`) but not full production inference yet.
 - API still creates tables at startup for local bootstrap; use Alembic for explicit migration flow.
+- API responses include `x-request-id` and baseline security headers (`X-Frame-Options`, `X-Content-Type-Options`, CSP).
+- Structured audit events are emitted via `signflow.audit` logger for model/session/job/export actions.
