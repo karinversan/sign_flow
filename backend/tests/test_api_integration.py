@@ -121,6 +121,84 @@ def test_model_registry_create_and_activate_flow(client):
     assert len(list_response.json()) >= 2
 
 
+def test_model_sync_local_repo_updates_artifact_metadata(client):
+    create_model_response = client.post(
+        "/v1/models",
+        json={
+            "name": "hf-local",
+            "hf_repo": "local/demo-repo",
+            "hf_revision": "main",
+            "framework": "onnx",
+            "activate": False,
+        },
+    )
+    assert create_model_response.status_code == 200
+    model_id = create_model_response.json()["id"]
+    assert create_model_response.json()["artifact_path"] is None
+
+    sync_response = client.post(f"/v1/models/{model_id}/sync")
+    assert sync_response.status_code == 200
+    payload = sync_response.json()
+    assert payload["artifact_path"] is not None
+    assert payload["downloaded_at"] is not None
+    assert payload["last_sync_error"] is None
+
+
+def test_hf_provider_job_flow_with_local_synced_model(client):
+    previous_provider = settings.model_provider
+    settings.model_provider = "hf"
+    try:
+        create_model_response = client.post(
+            "/v1/models",
+            json={
+                "name": "hf-runtime-local",
+                "hf_repo": "local/runtime-model",
+                "hf_revision": "main",
+                "framework": "onnx",
+                "activate": True,
+            },
+        )
+        assert create_model_response.status_code == 200
+        model_id = create_model_response.json()["id"]
+
+        sync_response = client.post(f"/v1/models/{model_id}/sync")
+        assert sync_response.status_code == 200
+
+        session_response = client.post("/v1/sessions", json={})
+        assert session_response.status_code == 200
+        session_id = session_response.json()["id"]
+
+        upload_url_response = client.post(
+            f"/v1/sessions/{session_id}/upload-url",
+            json={
+                "file_name": "hf-flow.mp4",
+                "content_type": "video/mp4",
+                "file_size_bytes": 2048,
+            },
+        )
+        assert upload_url_response.status_code == 200
+        upload_data = upload_url_response.json()
+        put_response = httpx.put(
+            upload_data["upload_url"],
+            content=b"hf-runtime-video",
+            headers={"Content-Type": "video/mp4"},
+            timeout=10.0,
+        )
+        assert put_response.status_code == 200
+
+        create_job_response = client.post(f"/v1/sessions/{session_id}/jobs", json={"model_version_id": model_id})
+        assert create_job_response.status_code == 200
+        job_id = create_job_response.json()["id"]
+
+        segments_response = client.get(f"/v1/jobs/{job_id}/segments")
+        assert segments_response.status_code == 200
+        segments = segments_response.json()
+        assert len(segments) > 0
+        assert model_id in segments[0]["text"]
+    finally:
+        settings.model_provider = previous_provider
+
+
 def test_expired_session_blocks_mutating_actions(client):
     session_response = client.post("/v1/sessions", json={})
     assert session_response.status_code == 200

@@ -5,8 +5,9 @@ from sqlalchemy import delete
 
 from app.db import SessionLocal
 from app.metrics import observe_job_processing
-from app.models import Job, JobStatus, SessionStatus, TranscriptSegment
+from app.models import Job, JobStatus, ModelVersion, SessionStatus, TranscriptSegment
 from app.providers.registry import get_model_provider
+from app.services.model_artifacts import ensure_model_artifacts
 from app.services.sessions import utc_now
 
 JobProcessResult = Literal["done", "failed", "expired", "not_found"]
@@ -45,10 +46,28 @@ def process_job_by_id(job_id: str) -> JobProcessResult:
         db.commit()
 
         provider = get_model_provider()
+        model_repo: str | None = None
+        model_revision: str | None = None
+        model_artifact_path: str | None = None
+        if job.model_version_id:
+            model = db.get(ModelVersion, job.model_version_id)
+            if model:
+                model_repo = model.hf_repo
+                model_revision = model.hf_revision
+
+        if provider.name == "huggingface" and model_repo and model_revision:
+            model_artifact_path = ensure_model_artifacts(job.model_version_id or "unknown", model_repo, model_revision)
+
         try:
             generated = provider.transcribe(
                 session.video_object_key,
-                options={"session_id": session.id, "model_id": job.model_version_id},
+                options={
+                    "session_id": session.id,
+                    "model_id": job.model_version_id,
+                    "hf_repo": model_repo,
+                    "hf_revision": model_revision,
+                    "artifact_path": model_artifact_path,
+                },
             )
         except Exception:
             job.status = JobStatus.FAILED

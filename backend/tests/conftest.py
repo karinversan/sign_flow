@@ -15,7 +15,10 @@ from app.services.queue import clear_inference_queue
 def reset_test_state():
     rate_limiter.reset()
     clear_inference_queue()
+    engine.dispose()
+    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    engine.dispose()
     db = SessionLocal()
     try:
         db.execute(delete(ExportArtifact))

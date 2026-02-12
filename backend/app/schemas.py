@@ -24,6 +24,9 @@ class ModelVersionResponse(BaseModel):
     framework: str
     status: str
     is_active: bool
+    artifact_path: str | None
+    downloaded_at: datetime | None
+    last_sync_error: str | None
     created_at: datetime
     updated_at: datetime
 

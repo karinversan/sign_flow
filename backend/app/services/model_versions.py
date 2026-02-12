@@ -2,6 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import ModelVersion, ModelVersionStatus
+from app.services.model_artifacts import ensure_model_artifacts
 from app.services.sessions import utc_now
 
 
@@ -41,6 +42,18 @@ def activate_model_version(db: Session, model: ModelVersion) -> ModelVersion:
 
     model.is_active = True
     model.status = ModelVersionStatus.ACTIVE
+    model.updated_at = now
+    db.commit()
+    db.refresh(model)
+    return model
+
+
+def sync_model_version_artifacts(db: Session, model: ModelVersion) -> ModelVersion:
+    now = utc_now()
+    path = ensure_model_artifacts(model.id, model.hf_repo, model.hf_revision)
+    model.artifact_path = path
+    model.downloaded_at = now
+    model.last_sync_error = None
     model.updated_at = now
     db.commit()
     db.refresh(model)

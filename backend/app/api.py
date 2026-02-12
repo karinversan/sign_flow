@@ -37,7 +37,7 @@ from app.schemas import (
 )
 from app.services.sessions import compute_expires_at, ensure_session_active, remaining_seconds, utc_now
 from app.services.exports import render_srt, render_txt, render_vtt
-from app.services.model_versions import activate_model_version, get_active_model_version
+from app.services.model_versions import activate_model_version, get_active_model_version, sync_model_version_artifacts
 from app.services.jobs import process_job_by_id
 from app.services.queue import enqueue_inference_job
 from app.services.uploads import validate_upload_request
@@ -106,6 +106,9 @@ def _model_to_response(model: ModelVersion) -> ModelVersionResponse:
         framework=model.framework,
         status=model.status.value,
         is_active=model.is_active,
+        artifact_path=model.artifact_path,
+        downloaded_at=model.downloaded_at,
+        last_sync_error=model.last_sync_error,
         created_at=model.created_at,
         updated_at=model.updated_at,
     )
@@ -188,6 +191,21 @@ def activate_model(model_id: str, db: Session = Depends(get_db)):
     return _model_to_response(activated)
 
 
+@router.post("/models/{model_id}/sync", response_model=ModelVersionResponse)
+def sync_model(model_id: str, db: Session = Depends(get_db)):
+    model = db.get(ModelVersion, model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    try:
+        synced = sync_model_version_artifacts(db, model)
+        return _model_to_response(synced)
+    except Exception as exc:
+        model.last_sync_error = str(exc)
+        model.updated_at = utc_now()
+        db.commit()
+        raise HTTPException(status_code=502, detail="model_sync_failed") from exc
+
+
 @router.post(
     "/sessions",
     response_model=SessionResponse,
@@ -263,7 +281,10 @@ def create_job_for_session(session_id: str, payload: JobCreateRequest, db: Sessi
             raise HTTPException(status_code=404, detail="model_not_found")
     else:
         active_model = get_active_model_version(db)
-        selected_model_id = active_model.id if active_model else "stub-v0"
+        if active_model:
+            selected_model_id = active_model.id
+        else:
+            selected_model_id = "stub-v0"
 
     now = utc_now()
     job = Job(

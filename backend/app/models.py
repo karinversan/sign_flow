@@ -112,5 +112,8 @@ class ModelVersion(Base):
         SqlEnum(ModelVersionStatus), default=ModelVersionStatus.STAGING, nullable=False
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    artifact_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    downloaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, nullable=False)

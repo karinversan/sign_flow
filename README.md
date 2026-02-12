@@ -96,6 +96,12 @@ docker compose -f docker-compose.backend.yml run --rm api pytest tests -q
 docker compose -f docker-compose.backend.yml run --rm api alembic upgrade head
 ```
 
+- Sync model artifacts (HF/local):
+
+```bash
+curl -X POST http://localhost:8000/v1/models/<model-id>/sync
+```
+
 - Monitoring endpoints:
   - Prometheus: `http://localhost:9090`
   - Grafana: `http://localhost:3005` (`admin/admin`)

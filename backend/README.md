@@ -11,6 +11,7 @@ This folder contains the first executable backend scaffold aligned with `docs/BA
 - Stub model provider (`ModelProvider` abstraction).
 - HF provider skeleton (`MODEL_PROVIDER=hf`) for future Hugging Face runtime wiring.
 - Model version registry API (`/v1/models`) with active model switching.
+- Model artifact sync endpoint (`POST /v1/models/{id}/sync`) with local/offline cache fallback.
 - MinIO presigned upload/download URL integration.
 - Upload request validation (MIME + size guard).
 - Per-endpoint API rate limits (in-memory baseline).
@@ -41,6 +42,16 @@ Run inside backend container (or local venv):
 
 ```bash
 alembic upgrade head
+```
+
+## Model sync quick check
+
+```bash
+curl -s -X POST http://localhost:8000/v1/models \
+  -H "Content-Type: application/json" \
+  -d '{"name":"hf-local","hf_repo":"local/demo","hf_revision":"main","framework":"onnx"}'
+
+curl -s -X POST http://localhost:8000/v1/models/<model-id>/sync
 ```
 
 ## Important notes
