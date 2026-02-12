@@ -37,6 +37,7 @@ from app.schemas import (
 )
 from app.services.sessions import compute_expires_at, ensure_session_active, remaining_seconds, utc_now
 from app.services.exports import render_srt, render_txt, render_vtt
+from app.services.model_routing import select_model_version_id
 from app.services.model_versions import activate_model_version, get_active_model_version, sync_model_version_artifacts
 from app.services.jobs import process_job_by_id
 from app.services.queue import enqueue_inference_job
@@ -141,6 +142,10 @@ def health():
         "status": "ok",
         "service": settings.app_name,
         "provider": get_model_provider().health(),
+        "routing": {
+            "canary_model_id": settings.canary_model_id,
+            "canary_traffic_percent": max(0, min(settings.canary_traffic_percent, 100)),
+        },
     }
 
 
@@ -274,17 +279,14 @@ def create_job_for_session(session_id: str, payload: JobCreateRequest, db: Sessi
     if not session.video_object_key:
         raise HTTPException(status_code=400, detail="video_not_uploaded")
 
-    selected_model_id: str | None = payload.model_version_id
-    if selected_model_id:
-        selected_model = db.get(ModelVersion, selected_model_id)
-        if not selected_model:
-            raise HTTPException(status_code=404, detail="model_not_found")
-    else:
-        active_model = get_active_model_version(db)
-        if active_model:
-            selected_model_id = active_model.id
-        else:
-            selected_model_id = "stub-v0"
+    try:
+        selected_model_id = select_model_version_id(
+            db=db,
+            session_id=session.id,
+            requested_model_id=payload.model_version_id,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="model_not_found") from exc
 
     now = utc_now()
     job = Job(

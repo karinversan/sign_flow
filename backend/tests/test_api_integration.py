@@ -199,6 +199,65 @@ def test_hf_provider_job_flow_with_local_synced_model(client):
         settings.model_provider = previous_provider
 
 
+def test_job_creation_uses_canary_routing_when_enabled(client):
+    previous_canary_id = settings.canary_model_id
+    previous_canary_percent = settings.canary_traffic_percent
+    previous_provider = settings.model_provider
+    settings.model_provider = "stub"
+    try:
+        active_response = client.get("/v1/models/active")
+        assert active_response.status_code == 200
+        active_id = active_response.json()["id"]
+
+        canary_response = client.post(
+            "/v1/models",
+            json={
+                "name": "routing-canary",
+                "hf_repo": "local/routing-canary",
+                "hf_revision": "main",
+                "framework": "onnx",
+                "activate": False,
+            },
+        )
+        assert canary_response.status_code == 200
+        canary_id = canary_response.json()["id"]
+
+        settings.canary_model_id = canary_id
+        settings.canary_traffic_percent = 100
+
+        session_response = client.post("/v1/sessions", json={})
+        assert session_response.status_code == 200
+        session_id = session_response.json()["id"]
+
+        upload_url_response = client.post(
+            f"/v1/sessions/{session_id}/upload-url",
+            json={
+                "file_name": "canary-route.mp4",
+                "content_type": "video/mp4",
+                "file_size_bytes": 1024,
+            },
+        )
+        assert upload_url_response.status_code == 200
+
+        upload_data = upload_url_response.json()
+        put_response = httpx.put(
+            upload_data["upload_url"],
+            content=b"canary-routing-test",
+            headers={"Content-Type": "video/mp4"},
+            timeout=10.0,
+        )
+        assert put_response.status_code == 200
+
+        job_response = client.post(f"/v1/sessions/{session_id}/jobs", json={})
+        assert job_response.status_code == 200
+        assert job_response.json()["model_version_id"] == canary_id
+        assert job_response.json()["model_version_id"] != active_id
+    finally:
+        settings.canary_model_id = previous_canary_id
+        settings.canary_traffic_percent = previous_canary_percent
+        settings.model_provider = previous_provider
+
+
 def test_expired_session_blocks_mutating_actions(client):
     session_response = client.post("/v1/sessions", json={})
     assert session_response.status_code == 200

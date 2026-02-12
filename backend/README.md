@@ -67,6 +67,15 @@ Example `segments.json`:
 ]
 ```
 
+## Canary routing (baseline)
+
+When user doesn't specify `model_version_id` during job creation, backend can route some traffic to canary model:
+
+- `CANARY_MODEL_ID=<model-id>`
+- `CANARY_TRAFFIC_PERCENT=0..100`
+
+Routing is deterministic per session id (hash bucket).
+
 ## Important notes
 
 - This is phase-1 backend scaffolding, not full production inference.

@@ -104,6 +104,8 @@ curl -X POST http://localhost:8000/v1/models/<model-id>/sync
 
 If model artifacts include `segments.json` or `transcript.txt`, HF provider uses those files to generate transcript output.
 
+Canary routing is available via `CANARY_MODEL_ID` + `CANARY_TRAFFIC_PERCENT` for safe model rollout.
+
 - Monitoring endpoints:
   - Prometheus: `http://localhost:9090`
   - Grafana: `http://localhost:3005` (`admin/admin`)

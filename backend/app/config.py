@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     hf_token: str | None = None
     hf_cache_dir: str = "/tmp/hf-cache"
     hf_offline: bool = True
+    canary_model_id: str | None = None
+    canary_traffic_percent: int = 0
     public_api_base_url: str = "http://localhost:8000"
 
     async_job_processing_enabled: bool = False
