@@ -18,9 +18,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    session_status = sa.Enum("ACTIVE", "EXPIRED", "CLOSED", name="sessionstatus")
-    job_status = sa.Enum("queued", "processing", "done", "failed", "expired", name="jobstatus")
-    export_status = sa.Enum("queued", "done", "failed", name="exportstatus")
+    # Create enum types explicitly once; prevent implicit CREATE TYPE during table creation.
+    session_status = sa.Enum("ACTIVE", "EXPIRED", "CLOSED", name="sessionstatus", create_type=False)
+    job_status = sa.Enum("queued", "processing", "done", "failed", "expired", name="jobstatus", create_type=False)
+    export_status = sa.Enum("queued", "done", "failed", name="exportstatus", create_type=False)
 
     session_status.create(op.get_bind(), checkfirst=True)
     job_status.create(op.get_bind(), checkfirst=True)
@@ -93,4 +94,3 @@ def downgrade() -> None:
     sa.Enum(name="exportstatus").drop(op.get_bind(), checkfirst=True)
     sa.Enum(name="jobstatus").drop(op.get_bind(), checkfirst=True)
     sa.Enum(name="sessionstatus").drop(op.get_bind(), checkfirst=True)
-
