@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 revision: str = "0001_initial"
@@ -18,10 +19,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Create enum types explicitly once; prevent implicit CREATE TYPE during table creation.
-    session_status = sa.Enum("ACTIVE", "EXPIRED", "CLOSED", name="sessionstatus", create_type=False)
-    job_status = sa.Enum("queued", "processing", "done", "failed", "expired", name="jobstatus", create_type=False)
-    export_status = sa.Enum("queued", "done", "failed", name="exportstatus", create_type=False)
+    # Use PostgreSQL ENUM with create_type=False to avoid implicit CREATE TYPE in op.create_table.
+    session_status = postgresql.ENUM("ACTIVE", "EXPIRED", "CLOSED", name="sessionstatus", create_type=False)
+    job_status = postgresql.ENUM("queued", "processing", "done", "failed", "expired", name="jobstatus", create_type=False)
+    export_status = postgresql.ENUM("queued", "done", "failed", name="exportstatus", create_type=False)
 
     session_status.create(op.get_bind(), checkfirst=True)
     job_status.create(op.get_bind(), checkfirst=True)
