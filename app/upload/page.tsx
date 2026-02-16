@@ -74,7 +74,12 @@ function getFileNameFromObjectKey(value: string | null | undefined): string {
 }
 
 function humanizeUploadError(message: string, uploaded = false): string {
-  if (message.includes("Failed to fetch")) {
+  const normalized = message.toLowerCase();
+  if (
+    normalized.includes("failed to fetch") ||
+    normalized.includes("load failed") ||
+    normalized.includes("networkerror")
+  ) {
     return "Cannot reach backend upload API. Check that backend is running on localhost:8000.";
   }
   if (message.startsWith("upload_failed_")) {
@@ -214,7 +219,7 @@ export default function UploadPage() {
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to load models";
-        setBackendError(message);
+        setBackendError(humanizeUploadError(message));
       }
     };
 
@@ -349,7 +354,7 @@ export default function UploadPage() {
         if (isSessionExpiredMessage(message)) {
           startFreshSession(true);
         }
-        setBackendError(message);
+        setBackendError(humanizeUploadError(message));
       } finally {
         setIsRestoring(false);
       }
@@ -543,7 +548,7 @@ export default function UploadPage() {
       if (isSessionExpiredMessage(message)) {
         startFreshSession(true);
       }
-      setBackendError(message);
+      setBackendError(humanizeUploadError(message));
     });
   };
 
@@ -575,7 +580,7 @@ export default function UploadPage() {
       if (isSessionExpiredMessage(message)) {
         startFreshSession(true);
       }
-      setBackendError(message);
+      setBackendError(humanizeUploadError(message));
     });
   };
 
@@ -643,7 +648,7 @@ export default function UploadPage() {
       if (isSessionExpiredMessage(message)) {
         startFreshSession(true);
       }
-      setBackendError(message);
+      setBackendError(humanizeUploadError(message));
     }
   };
 

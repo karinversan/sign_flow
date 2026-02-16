@@ -50,7 +50,12 @@ const timeFormatter = new Intl.DateTimeFormat([], {
 });
 
 function formatLiveError(message: string) {
-  if (message.includes("Failed to fetch")) {
+  const normalized = message.toLowerCase();
+  if (
+    normalized.includes("failed to fetch") ||
+    normalized.includes("load failed") ||
+    normalized.includes("networkerror")
+  ) {
     return "Cannot reach backend live API. Check that backend is running and NEXT_PUBLIC_API_BASE_URL is correct.";
   }
   if (message.includes("live_inference_failed")) {
