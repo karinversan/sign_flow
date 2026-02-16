@@ -34,7 +34,11 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { outputLanguages, signLanguages, voiceOptions } from "@/lib/mock/data";
+import {
+  runtimeOutputLanguages,
+  runtimeSignLanguages,
+  runtimeVoiceOptions
+} from "@/lib/config/runtime-options";
 import { defaultTranscript, TranscriptSegment } from "@/lib/mock/jobs";
 import {
   ApiModelVersion,
@@ -165,15 +169,15 @@ export default function UploadPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  const [signLanguage, setSignLanguage] = useState("ASL");
-  const [outputLanguage, setOutputLanguage] = useState("English");
+  const [signLanguage, setSignLanguage] = useState<string>(runtimeSignLanguages[0]);
+  const [outputLanguage, setOutputLanguage] = useState<string>(runtimeOutputLanguages[0]);
   const [mode, setMode] = useState<RenderMode>("both");
   const allowsSubtitles = mode !== "voice";
   const allowsVoiceover = mode !== "subtitles";
 
   const [subtitleEnabled, setSubtitleEnabled] = useState(true);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [voice, setVoice] = useState("nova");
+  const [voice, setVoice] = useState<string>(runtimeVoiceOptions[0].value);
   const [fontSize, setFontSize] = useState("M");
   const [fontFamily, setFontFamily] = useState("Inter");
   const [subtitleColor, setSubtitleColor] = useState("#ffffff");
@@ -783,7 +787,7 @@ export default function UploadPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {signLanguages.map((language) => (
+                      {runtimeSignLanguages.map((language) => (
                         <SelectItem key={language} value={language}>
                           {language}
                         </SelectItem>
@@ -798,7 +802,7 @@ export default function UploadPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {outputLanguages.map((language) => (
+                      {runtimeOutputLanguages.map((language) => (
                         <SelectItem key={language} value={language}>
                           {language}
                         </SelectItem>
@@ -1121,7 +1125,7 @@ export default function UploadPage() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {voiceOptions.map((item) => (
+                              {runtimeVoiceOptions.map((item) => (
                                 <SelectItem key={item.value} value={item.value}>
                                   {item.label}
                                 </SelectItem>

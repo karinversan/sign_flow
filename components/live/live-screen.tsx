@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Camera, CircleDot, Eraser, Mic2, Pause, Play, Settings2 } from "lucide-react";
 
 import { ApiModelVersion, listModels, livePredictChunk } from "@/lib/api/backend";
+import { runtimeOutputLanguages, runtimeSignLanguages, runtimeVoiceOptions } from "@/lib/config/runtime-options";
 import { useMediaQuery } from "@/lib/hooks/use-media-query";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -31,14 +32,14 @@ import { LiveSettings, LiveSettingsState } from "@/components/live/live-settings
 import { SubtitleLine, SubtitleOverlay } from "@/components/live/subtitle-overlay";
 
 const defaultSettings: LiveSettingsState = {
-  signLanguage: "ASL",
-  outputLanguage: "English",
+  signLanguage: runtimeSignLanguages[0],
+  outputLanguage: runtimeOutputLanguages[0],
   subtitleSize: "M",
   subtitlePosition: "bottom",
   subtitleBg: true,
   profile: "Speed",
   voiceEnabled: false,
-  voice: "nova",
+  voice: runtimeVoiceOptions[0].value,
   smoothness: 62
 };
 

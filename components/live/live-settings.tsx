@@ -12,7 +12,12 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { profiles, outputLanguages, signLanguages, voiceOptions } from "@/lib/mock/data";
+import {
+  runtimeOutputLanguages,
+  runtimeProfiles,
+  runtimeSignLanguages,
+  runtimeVoiceOptions
+} from "@/lib/config/runtime-options";
 
 type LiveSettingsState = {
   signLanguage: string;
@@ -44,7 +49,7 @@ export function LiveSettings({ state, setState }: LiveSettingsProps) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {signLanguages.map((language) => (
+            {runtimeSignLanguages.map((language) => (
               <SelectItem key={language} value={language}>
                 {language}
               </SelectItem>
@@ -63,7 +68,7 @@ export function LiveSettings({ state, setState }: LiveSettingsProps) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {outputLanguages.map((language) => (
+            {runtimeOutputLanguages.map((language) => (
               <SelectItem key={language} value={language}>
                 {language}
               </SelectItem>
@@ -134,7 +139,7 @@ export function LiveSettings({ state, setState }: LiveSettingsProps) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {profiles.map((profile) => (
+            {runtimeProfiles.map((profile) => (
               <SelectItem key={profile} value={profile}>
                 {profile}
               </SelectItem>
@@ -163,7 +168,7 @@ export function LiveSettings({ state, setState }: LiveSettingsProps) {
             <SelectValue placeholder="Select voice" />
           </SelectTrigger>
           <SelectContent>
-            {voiceOptions.map((voice) => (
+            {runtimeVoiceOptions.map((voice) => (
               <SelectItem key={voice.value} value={voice.value}>
                 {voice.label}
               </SelectItem>
